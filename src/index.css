@@ -21,9 +21,9 @@
     --popover: 20 12% 9%;
     --popover-foreground: 40 20% 94%;
 
-    /* Primary - warm amber/gold for progress & CTAs */
-    --primary: 38 92% 50%;
-    --primary-foreground: 20 14% 4%;
+    /* Primary - electric cyan for progress & CTAs */
+    --primary: 194 90% 54%;
+    --primary-foreground: 194 90% 4%;
 
     /* Secondary - stone/neutral */
     --secondary: 30 8% 18%;
@@ -44,38 +44,38 @@
     /* UI elements */
     --border: 30 8% 16%;
     --input: 30 8% 12%;
-    --ring: 38 92% 50%;
+    --ring: 194 90% 54%;
 
     --radius: 0.75rem;
 
     /* Sidebar tokens */
     --sidebar-background: 20 14% 4%;
     --sidebar-foreground: 40 20% 85%;
-    --sidebar-primary: 38 92% 50%;
-    --sidebar-primary-foreground: 20 14% 4%;
+    --sidebar-primary: 194 90% 54%;
+    --sidebar-primary-foreground: 194 90% 4%;
     --sidebar-accent: 30 10% 12%;
     --sidebar-accent-foreground: 40 20% 94%;
     --sidebar-border: 30 8% 14%;
-    --sidebar-ring: 38 92% 50%;
+    --sidebar-ring: 194 90% 54%;
 
     /* Custom tokens */
     --success: 142 50% 45%;
     --success-foreground: 40 20% 94%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 20 14% 4%;
+    --warning: 45 93% 47%;
+    --warning-foreground: 45 93% 10%;
     --info: 210 50% 50%;
     --info-foreground: 40 20% 94%;
 
     /* Gradient definitions */
-    --gradient-primary: linear-gradient(135deg, hsl(38 92% 50%) 0%, hsl(28 85% 45%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(194 90% 54%) 0%, hsl(200 85% 45%) 100%);
     --gradient-surface: linear-gradient(180deg, hsl(20 12% 9%) 0%, hsl(20 14% 5%) 100%);
-    --gradient-glow: radial-gradient(ellipse at center, hsl(38 92% 50% / 0.15) 0%, transparent 70%);
+    --gradient-glow: radial-gradient(ellipse at center, hsl(194 90% 54% / 0.15) 0%, transparent 70%);
 
     /* Shadow definitions */
     --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
     --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.4), 0 2px 4px -2px hsl(0 0% 0% / 0.3);
     --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.5), 0 4px 6px -4px hsl(0 0% 0% / 0.4);
-    --shadow-glow: 0 0 30px -5px hsl(38 92% 50% / 0.3);
+    --shadow-glow: 0 0 30px -5px hsl(194 90% 54% / 0.3);
   }
 }
 
