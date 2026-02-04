@@ -46,12 +46,17 @@ export type Database = {
       }
       onboarding_data: {
         Row: {
+          activity_level: string | null
           bedtime: string | null
+          calorie_target: number | null
+          carb_target: number | null
           commute_minutes: number | null
           created_at: string
           experience_tier: string
+          fat_target: number | null
           flexible_work: boolean | null
           friction_points: string[] | null
+          height_cm: number | null
           id: string
           journaling_openness: number | null
           nutrition_confidence: number | null
@@ -59,25 +64,33 @@ export type Database = {
           onboarding_step: number | null
           preferred_training_window: string | null
           primary_goals: string[] | null
+          protein_target: number | null
           reading_habit: number | null
           rest_days: string[] | null
           secondary_goals: string[] | null
           selected_program: string | null
           sleep_duration: number
           stress_level: number | null
+          target_weight_kg: number | null
           updated_at: string
           user_id: string
           wake_time: string
+          weight_kg: number | null
           work_end: string | null
           work_start: string | null
         }
         Insert: {
+          activity_level?: string | null
           bedtime?: string | null
+          calorie_target?: number | null
+          carb_target?: number | null
           commute_minutes?: number | null
           created_at?: string
           experience_tier?: string
+          fat_target?: number | null
           flexible_work?: boolean | null
           friction_points?: string[] | null
+          height_cm?: number | null
           id?: string
           journaling_openness?: number | null
           nutrition_confidence?: number | null
@@ -85,25 +98,33 @@ export type Database = {
           onboarding_step?: number | null
           preferred_training_window?: string | null
           primary_goals?: string[] | null
+          protein_target?: number | null
           reading_habit?: number | null
           rest_days?: string[] | null
           secondary_goals?: string[] | null
           selected_program?: string | null
           sleep_duration?: number
           stress_level?: number | null
+          target_weight_kg?: number | null
           updated_at?: string
           user_id: string
           wake_time?: string
+          weight_kg?: number | null
           work_end?: string | null
           work_start?: string | null
         }
         Update: {
+          activity_level?: string | null
           bedtime?: string | null
+          calorie_target?: number | null
+          carb_target?: number | null
           commute_minutes?: number | null
           created_at?: string
           experience_tier?: string
+          fat_target?: number | null
           flexible_work?: boolean | null
           friction_points?: string[] | null
+          height_cm?: number | null
           id?: string
           journaling_openness?: number | null
           nutrition_confidence?: number | null
@@ -111,15 +132,18 @@ export type Database = {
           onboarding_step?: number | null
           preferred_training_window?: string | null
           primary_goals?: string[] | null
+          protein_target?: number | null
           reading_habit?: number | null
           rest_days?: string[] | null
           secondary_goals?: string[] | null
           selected_program?: string | null
           sleep_duration?: number
           stress_level?: number | null
+          target_weight_kg?: number | null
           updated_at?: string
           user_id?: string
           wake_time?: string
+          weight_kg?: number | null
           work_end?: string | null
           work_start?: string | null
         }
@@ -223,6 +247,160 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      training_days: {
+        Row: {
+          created_at: string
+          day_number: number
+          focus: string
+          id: string
+          name: string
+          program_key: string
+        }
+        Insert: {
+          created_at?: string
+          day_number: number
+          focus: string
+          id?: string
+          name: string
+          program_key: string
+        }
+        Update: {
+          created_at?: string
+          day_number?: number
+          focus?: string
+          id?: string
+          name?: string
+          program_key?: string
+        }
+        Relationships: []
+      }
+      training_exercises: {
+        Row: {
+          created_at: string
+          exercise_order: number
+          id: string
+          name: string
+          notes: string | null
+          reps: string
+          rest_seconds: number | null
+          sets_advanced: number
+          sets_amateur: number
+          sets_beginner: number
+          sets_intermediate: number
+          training_day_id: string
+        }
+        Insert: {
+          created_at?: string
+          exercise_order: number
+          id?: string
+          name: string
+          notes?: string | null
+          reps: string
+          rest_seconds?: number | null
+          sets_advanced?: number
+          sets_amateur?: number
+          sets_beginner?: number
+          sets_intermediate?: number
+          training_day_id: string
+        }
+        Update: {
+          created_at?: string
+          exercise_order?: number
+          id?: string
+          name?: string
+          notes?: string | null
+          reps?: string
+          rest_seconds?: number | null
+          sets_advanced?: number
+          sets_amateur?: number
+          sets_beginner?: number
+          sets_intermediate?: number
+          training_day_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_exercises_training_day_id_fkey"
+            columns: ["training_day_id"]
+            isOneToOne: false
+            referencedRelation: "training_days"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      training_programs: {
+        Row: {
+          created_at: string
+          days_per_week: number
+          description: string | null
+          id: string
+          name: string
+          program_key: string
+          program_type: string
+        }
+        Insert: {
+          created_at?: string
+          days_per_week: number
+          description?: string | null
+          id?: string
+          name: string
+          program_key: string
+          program_type: string
+        }
+        Update: {
+          created_at?: string
+          days_per_week?: number
+          description?: string | null
+          id?: string
+          name?: string
+          program_key?: string
+          program_type?: string
+        }
+        Relationships: []
+      }
+      user_training_schedule: {
+        Row: {
+          completed: boolean | null
+          completed_at: string | null
+          created_at: string
+          day_of_week: number
+          id: string
+          training_day_id: string
+          updated_at: string
+          user_id: string
+          week_number: number
+        }
+        Insert: {
+          completed?: boolean | null
+          completed_at?: string | null
+          created_at?: string
+          day_of_week: number
+          id?: string
+          training_day_id: string
+          updated_at?: string
+          user_id: string
+          week_number?: number
+        }
+        Update: {
+          completed?: boolean | null
+          completed_at?: string | null
+          created_at?: string
+          day_of_week?: number
+          id?: string
+          training_day_id?: string
+          updated_at?: string
+          user_id?: string
+          week_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_training_schedule_training_day_id_fkey"
+            columns: ["training_day_id"]
+            isOneToOne: false
+            referencedRelation: "training_days"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
