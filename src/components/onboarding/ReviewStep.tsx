@@ -1,0 +1,157 @@
+import { Clock, Calendar, Target, Dumbbell, Moon, Sun } from "lucide-react";
+import { OnboardingData } from "@/pages/Onboarding";
+
+interface ReviewStepProps {
+  data: OnboardingData;
+}
+
+const programLabels: Record<string, string> = {
+  "3_day_strength": "3-Day Strength & Hypertrophy",
+  "4_day_strength": "4-Day Strength & Hypertrophy",
+  "4_day_hybrid": "4-Day Hybrid",
+  "5_day_hybrid": "5-Day Hybrid Performance",
+};
+
+const experienceLabels: Record<string, string> = {
+  absolute_amateur: "Absolute Amateur",
+  beginner: "Beginner",
+  intermediate: "Intermediate",
+  advanced: "Advanced",
+};
+
+const goalLabels: Record<string, string> = {
+  fat_loss: "Fat Loss",
+  recomposition: "Recomposition",
+  muscle_gain: "Muscle / Strength",
+  athletic: "Athletic Performance",
+  energy: "Energy",
+  confidence: "Confidence",
+  structure: "Structure",
+  stress: "Stress Regulation",
+  cognitive: "Cognitive Performance",
+};
+
+export function ReviewStep({ data }: ReviewStepProps) {
+  return (
+    <div className="space-y-8">
+      <div className="space-y-2">
+        <h2 className="text-2xl font-semibold tracking-tight">Review Your Structure</h2>
+        <p className="text-muted-foreground">
+          This is what we're installing. Confirm and begin.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        {/* Sleep Schedule */}
+        <div className="card-ritual">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 rounded-lg bg-info/10">
+              <Moon className="h-4 w-4 text-info" />
+            </div>
+            <h3 className="font-medium">Sleep Schedule</h3>
+          </div>
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <span className="text-muted-foreground block text-xs">Wake</span>
+              <span className="font-medium">{data.wakeTime}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground block text-xs">Sleep</span>
+              <span className="font-medium">{data.bedtime}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground block text-xs">Duration</span>
+              <span className="font-medium">{data.sleepDuration}h</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Work Schedule */}
+        <div className="card-ritual">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 rounded-lg bg-muted">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <h3 className="font-medium">Work & Training</h3>
+          </div>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Work hours</span>
+              <span className="font-medium">{data.workStart} - {data.workEnd}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Training window</span>
+              <span className="font-medium capitalize">{data.preferredTrainingWindow}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Rest days</span>
+              <span className="font-medium capitalize">{data.restDays.join(", ")}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Program */}
+        <div className="card-ritual">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Dumbbell className="h-4 w-4 text-primary" />
+            </div>
+            <h3 className="font-medium">Training Program</h3>
+          </div>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Program</span>
+              <span className="font-medium">{programLabels[data.selectedProgram]}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Experience</span>
+              <span className="font-medium">{experienceLabels[data.experienceTier]}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Goals */}
+        <div className="card-ritual">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 rounded-lg bg-success/10">
+              <Target className="h-4 w-4 text-success" />
+            </div>
+            <h3 className="font-medium">Goals</h3>
+          </div>
+          <div className="space-y-2 text-sm">
+            <div>
+              <span className="text-muted-foreground text-xs block mb-1">Primary</span>
+              <div className="flex flex-wrap gap-1">
+                {data.primaryGoals.map((goal) => (
+                  <span key={goal} className="px-2 py-1 bg-primary/10 text-primary rounded text-xs">
+                    {goalLabels[goal]}
+                  </span>
+                ))}
+              </div>
+            </div>
+            {data.secondaryGoals.length > 0 && (
+              <div>
+                <span className="text-muted-foreground text-xs block mb-1">Secondary</span>
+                <div className="flex flex-wrap gap-1">
+                  {data.secondaryGoals.map((goal) => (
+                    <span key={goal} className="px-2 py-1 bg-muted text-muted-foreground rounded text-xs">
+                      {goalLabels[goal]}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Commitment */}
+      <div className="border border-primary/20 rounded-lg p-4 bg-primary/5">
+        <p className="text-sm text-center text-muted-foreground">
+          You're committing to <span className="text-foreground font-medium">8 weeks</span> of consistent execution.
+          No changes. No excuses. Just structure.
+        </p>
+      </div>
+    </div>
+  );
+}
