@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { format, startOfWeek, addDays, isSameDay } from "date-fns";
+import { format, startOfWeek, addDays, isSameDay, parseISO } from "date-fns";
 import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,10 +20,14 @@ interface ScheduleBlock {
   is_locked: boolean;
 }
 
+// Time slots from 5 AM to 11 PM
+const HOURS = Array.from({ length: 19 }, (_, i) => i + 5);
+const HOUR_HEIGHT = 48; // pixels per hour
+
 export default function CalendarPage() {
-  const [selectedDate, setSelectedDate] = useState(new Date());
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date()));
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
+  const [selectedBlock, setSelectedBlock] = useState<ScheduleBlock | null>(null);
   
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -38,19 +42,17 @@ export default function CalendarPage() {
     const fetchBlocks = async () => {
       if (!user) return;
 
-      const dayOfWeek = selectedDate.getDay();
       const { data } = await supabase
         .from("schedule_blocks")
         .select("*")
         .eq("user_id", user.id)
-        .eq("day_of_week", dayOfWeek)
         .order("start_time");
 
       if (data) setBlocks(data);
     };
 
     fetchBlocks();
-  }, [user, selectedDate]);
+  }, [user]);
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -65,31 +67,54 @@ export default function CalendarPage() {
   const getBlockColor = (type: string) => {
     switch (type) {
       case "training":
-        return "bg-primary/20 border-l-primary";
+        return "bg-primary/80 border-primary text-primary-foreground";
       case "morning_routine":
+        return "bg-emerald-500/20 border-emerald-500/50 text-emerald-300";
       case "evening_routine":
-        return "bg-secondary border-l-secondary-foreground/50";
+        return "bg-violet-500/20 border-violet-500/50 text-violet-300";
       case "work":
-        return "bg-muted border-l-muted-foreground/30";
+        return "bg-muted/80 border-border text-muted-foreground";
       case "reading":
-        return "bg-info/10 border-l-info";
+        return "bg-sky-500/20 border-sky-500/50 text-sky-300";
+      case "wake":
+        return "bg-amber-500/20 border-amber-500/50 text-amber-300";
       case "sleep":
-        return "bg-info/5 border-l-info/50";
+        return "bg-indigo-500/10 border-indigo-500/30 text-indigo-300";
       default:
-        return "bg-accent border-l-accent-foreground/30";
+        return "bg-accent/50 border-accent text-accent-foreground";
     }
   };
 
-  const formatTime = (time: string) => {
-    const [hours, minutes] = time.split(":");
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? "PM" : "AM";
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${minutes} ${ampm}`;
+  const parseTime = (time: string): number => {
+    const [hours, minutes] = time.split(":").map(Number);
+    return hours + minutes / 60;
   };
 
-  // Filter out sleep blocks for cleaner view
-  const visibleBlocks = blocks.filter((b) => b.block_type !== "sleep");
+  const getBlockStyle = (block: ScheduleBlock) => {
+    const startHour = parseTime(block.start_time);
+    const endHour = parseTime(block.end_time);
+    
+    // Handle overnight blocks (e.g., sleep from 22:00 to 06:00)
+    let duration = endHour - startHour;
+    if (duration <= 0) {
+      // For overnight blocks, just show until midnight
+      duration = 24 - startHour;
+    }
+    
+    // Only show blocks within visible hours (5 AM to 11 PM)
+    if (startHour < 5 || startHour >= 23) return null;
+    
+    const top = (startHour - 5) * HOUR_HEIGHT;
+    const height = Math.max(duration * HOUR_HEIGHT, 20); // Minimum height
+    
+    return { top, height };
+  };
+
+  const formatTimeShort = (time: string) => {
+    const [hours] = time.split(":");
+    const hour = parseInt(hours);
+    return hour > 12 ? `${hour - 12}p` : `${hour}a`;
+  };
 
   if (authLoading) {
     return (
@@ -103,99 +128,194 @@ export default function CalendarPage() {
     <MobileLayout footer={<BottomNav />}>
       <div className="flex flex-col h-full">
         {/* Week Navigation */}
-        <div className="px-6 py-4 border-b border-border/50">
-          <div className="flex items-center justify-between mb-4">
+        <div className="px-4 py-3 border-b border-border/50 shrink-0">
+          <div className="flex items-center justify-between">
             <Button variant="ghost" size="icon" onClick={goToPreviousWeek}>
               <ChevronLeft className="h-5 w-5" />
             </Button>
             <h2 className="text-sm font-medium">
-              {format(weekStart, "MMM d")} – {format(addDays(weekStart, 6), "MMM d, yyyy")}
+              {format(weekStart, "MMM d")} – {format(addDays(weekStart, 6), "MMM d")}
             </h2>
             <Button variant="ghost" size="icon" onClick={goToNextWeek}>
               <ChevronRight className="h-5 w-5" />
             </Button>
           </div>
+        </div>
 
-          {/* Week Days */}
-          <div className="flex justify-between">
-            {weekDays.map((day) => {
-              const isSelected = isSameDay(day, selectedDate);
-              const isToday = isSameDay(day, new Date());
-              
-              return (
-                <button
-                  key={day.toISOString()}
-                  onClick={() => setSelectedDate(day)}
+        {/* Week Header */}
+        <div className="flex border-b border-border/50 shrink-0">
+          <div className="w-10 shrink-0" /> {/* Time column spacer */}
+          {weekDays.map((day) => {
+            const isToday = isSameDay(day, new Date());
+            return (
+              <div
+                key={day.toISOString()}
+                className={cn(
+                  "flex-1 py-2 text-center border-l border-border/30",
+                  isToday && "bg-primary/10"
+                )}
+              >
+                <span className="text-[10px] text-muted-foreground block">
+                  {format(day, "EEE")}
+                </span>
+                <span
                   className={cn(
-                    "flex flex-col items-center p-2 rounded-lg transition-all duration-200 min-w-[40px]",
-                    isSelected
-                      ? "bg-primary text-primary-foreground"
-                      : isToday
-                      ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:bg-muted/50"
+                    "text-sm font-semibold",
+                    isToday && "text-primary"
                   )}
                 >
-                  <span className="text-xs">{format(day, "EEE")}</span>
-                  <span className="text-lg font-semibold">{format(day, "d")}</span>
-                </button>
+                  {format(day, "d")}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Weekly Grid */}
+        <div className="flex-1 overflow-auto">
+          <div className="flex min-h-full">
+            {/* Time Column */}
+            <div className="w-10 shrink-0 border-r border-border/30">
+              {HOURS.map((hour) => (
+                <div
+                  key={hour}
+                  className="h-12 flex items-start justify-end pr-1 pt-0.5"
+                >
+                  <span className="text-[10px] text-muted-foreground">
+                    {hour > 12 ? `${hour - 12}p` : hour === 12 ? "12p" : `${hour}a`}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Day Columns */}
+            {weekDays.map((day, dayIndex) => {
+              const dayBlocks = blocks.filter(
+                (b) => b.day_of_week === day.getDay()
+              );
+              const isToday = isSameDay(day, new Date());
+
+              return (
+                <div
+                  key={day.toISOString()}
+                  className={cn(
+                    "flex-1 relative border-l border-border/30",
+                    isToday && "bg-primary/5"
+                  )}
+                >
+                  {/* Hour lines */}
+                  {HOURS.map((hour) => (
+                    <div
+                      key={hour}
+                      className="h-12 border-b border-border/20"
+                    />
+                  ))}
+
+                  {/* Schedule blocks */}
+                  {dayBlocks.map((block) => {
+                    const style = getBlockStyle(block);
+                    if (!style) return null;
+
+                    // Filter out sleep blocks from view
+                    if (block.block_type === "sleep") return null;
+
+                    return (
+                      <motion.div
+                        key={block.id}
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className={cn(
+                          "absolute left-0.5 right-0.5 rounded-sm border-l-2 px-0.5 py-0.5 overflow-hidden cursor-pointer transition-all hover:z-10 hover:shadow-lg",
+                          getBlockColor(block.block_type)
+                        )}
+                        style={{
+                          top: style.top,
+                          height: style.height,
+                        }}
+                        onClick={() => setSelectedBlock(block)}
+                      >
+                        <div className="flex items-start gap-0.5">
+                          {block.is_locked && (
+                            <Lock className="h-2 w-2 shrink-0 mt-0.5 opacity-60" />
+                          )}
+                          <span className="text-[9px] font-medium leading-tight line-clamp-2">
+                            {block.title}
+                          </span>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
               );
             })}
           </div>
         </div>
 
-        {/* Schedule Blocks */}
-        <div className="flex-1 overflow-auto px-6 py-4">
-          <div className="space-y-2">
-            {visibleBlocks.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">No scheduled blocks for this day.</p>
-              </div>
-            ) : (
-              visibleBlocks.map((block, index) => (
-                <motion.div
-                  key={block.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className={cn(
-                    "p-4 rounded-lg border-l-2 transition-all duration-200",
-                    getBlockColor(block.block_type)
+        {/* Block Detail Modal */}
+        {selectedBlock && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="absolute bottom-20 left-4 right-4 p-4 bg-card border border-border rounded-lg shadow-xl z-20"
+          >
+            <div className="flex items-start justify-between mb-2">
+              <div>
+                <h3 className="font-semibold flex items-center gap-2">
+                  {selectedBlock.title}
+                  {selectedBlock.is_locked && (
+                    <Lock className="h-3 w-3 text-muted-foreground" />
                   )}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-medium">{block.title}</h3>
-                        {block.is_locked && (
-                          <Lock className="h-3 w-3 text-muted-foreground" />
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {formatTime(block.start_time)} – {formatTime(block.end_time)}
-                      </p>
-                    </div>
-                    <span
-                      className={cn(
-                        "text-xs px-2 py-1 rounded capitalize",
-                        block.block_type === "training"
-                          ? "bg-primary/10 text-primary"
-                          : "bg-muted text-muted-foreground"
-                      )}
-                    >
-                      {block.block_type.replace("_", " ")}
-                    </span>
-                  </div>
-                </motion.div>
-              ))
-            )}
-          </div>
-        </div>
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {formatTimeShort(selectedBlock.start_time)} – {formatTimeShort(selectedBlock.end_time)}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedBlock(null)}
+              >
+                ✕
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "text-xs px-2 py-0.5 rounded capitalize",
+                  selectedBlock.block_type === "training"
+                    ? "bg-primary/20 text-primary"
+                    : "bg-muted text-muted-foreground"
+                )}
+              >
+                {selectedBlock.block_type.replace("_", " ")}
+              </span>
+              {selectedBlock.is_locked && (
+                <span className="text-xs text-muted-foreground">
+                  Non-negotiable
+                </span>
+              )}
+            </div>
+          </motion.div>
+        )}
 
-        {/* Info */}
-        <div className="px-6 py-4 border-t border-border/50">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        {/* Legend */}
+        <div className="px-4 py-3 border-t border-border/50 shrink-0">
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
             <Lock className="h-3 w-3" />
-            <span>Locked blocks cannot be deleted. They're your non-negotiables.</span>
+            <span>= Locked</span>
+            <span className="mx-2">•</span>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-sm bg-primary/80" />
+              <span>Training</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-sm bg-emerald-500/40" />
+              <span>Morning</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-sm bg-violet-500/40" />
+              <span>Evening</span>
+            </div>
           </div>
         </div>
       </div>
