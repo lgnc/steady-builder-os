@@ -16,6 +16,7 @@ import { ProgramStep } from "@/components/onboarding/ProgramStep";
 import { GoalsStep } from "@/components/onboarding/GoalsStep";
 import { FrictionStep } from "@/components/onboarding/FrictionStep";
 import { ReviewStep } from "@/components/onboarding/ReviewStep";
+import { NutritionStep } from "@/components/onboarding/NutritionStep";
 
 export interface OnboardingData {
   // Sleep
@@ -47,9 +48,15 @@ export interface OnboardingData {
   readingHabit: number;
   journalingOpenness: number;
   nutritionConfidence: number;
+  
+  // Nutrition
+  heightCm?: number;
+  weightKg?: number;
+  targetWeightKg?: number;
+  activityLevel: string;
 }
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 
 const defaultData: OnboardingData = {
   wakeTime: "06:00",
@@ -70,6 +77,7 @@ const defaultData: OnboardingData = {
   readingHabit: 5,
   journalingOpenness: 5,
   nutritionConfidence: 5,
+  activityLevel: "moderate",
 };
 
 export default function OnboardingPage() {
@@ -186,6 +194,10 @@ export default function OnboardingPage() {
           reading_habit: data.readingHabit,
           journaling_openness: data.journalingOpenness,
           nutrition_confidence: data.nutritionConfidence,
+          height_cm: data.heightCm,
+          weight_kg: data.weightKg,
+          target_weight_kg: data.targetWeightKg,
+          activity_level: data.activityLevel,
           onboarding_completed: true,
           onboarding_step: TOTAL_STEPS,
         })
@@ -324,6 +336,7 @@ export default function OnboardingPage() {
     "Select Program",
     "Your Goals",
     "Current State",
+    "Body & Nutrition",
     "Review & Install",
   ];
 
@@ -366,7 +379,8 @@ export default function OnboardingPage() {
               {step === 4 && <ProgramStep data={data} updateData={updateData} />}
               {step === 5 && <GoalsStep data={data} updateData={updateData} />}
               {step === 6 && <FrictionStep data={data} updateData={updateData} />}
-              {step === 7 && <ReviewStep data={data} />}
+              {step === 7 && <NutritionStep data={data} updateData={updateData} />}
+              {step === 8 && <ReviewStep data={data} />}
             </motion.div>
           </AnimatePresence>
         </div>
