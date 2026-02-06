@@ -81,6 +81,8 @@ export default function CalendarPage() {
         return "bg-amber-500/20 border-amber-500/50 text-amber-300";
       case "sleep":
         return "bg-indigo-500/10 border-indigo-500/30 text-indigo-300";
+      case "commute":
+        return "bg-orange-500/15 border-orange-500/40 text-orange-300";
       default:
         return "bg-accent/50 border-accent text-accent-foreground";
     }

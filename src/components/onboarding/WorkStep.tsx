@@ -1,4 +1,4 @@
-import { Briefcase, Clock, Car, Sun, Moon, Sunset } from "lucide-react";
+import { Briefcase, Clock, Sun, Moon, Sunset } from "lucide-react";
 import { OnboardingData } from "@/pages/Onboarding";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -33,69 +33,83 @@ export function WorkStep({ data, updateData }: WorkStepProps) {
     updateData({ restDays: newRestDays });
   };
 
+  const isStandard = data.workType === "standard";
+  const isShiftWork = data.workType === "shift_work";
+  const isFifo = data.workType === "fifo";
+
   return (
     <div className="space-y-8">
       <div className="space-y-2">
-        <h2 className="text-2xl font-semibold tracking-tight">Work & Time</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">Work & Availability</h2>
         <p className="text-muted-foreground">
-          Understanding your constraints helps us build around them.
+          {isStandard
+            ? "Set your typical work hours so we can build around them."
+            : isShiftWork
+            ? "Since your hours change, we'll focus on your training preferences and rest days."
+            : "We'll set up your home schedule. You can toggle to on-site mode later."}
         </p>
       </div>
 
       <div className="space-y-6">
-        {/* Work Hours */}
-        <div className="space-y-3">
-          <label className="flex items-center gap-2 text-sm font-medium">
-            <Briefcase className="h-4 w-4 text-primary" />
-            Work hours
-          </label>
-          <div className="flex items-center gap-3">
-            <Input
-              type="time"
-              value={data.workStart}
-              onChange={(e) => updateData({ workStart: e.target.value })}
-              className="h-12 bg-input border-border text-foreground"
-            />
-            <span className="text-muted-foreground">to</span>
-            <Input
-              type="time"
-              value={data.workEnd}
-              onChange={(e) => updateData({ workEnd: e.target.value })}
-              className="h-12 bg-input border-border text-foreground"
-            />
+        {/* Work Hours — only for standard */}
+        {isStandard && (
+          <div className="space-y-3">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <Briefcase className="h-4 w-4 text-primary" />
+              Work hours
+            </label>
+            <div className="flex items-center gap-3">
+              <Input
+                type="time"
+                value={data.workStart}
+                onChange={(e) => updateData({ workStart: e.target.value })}
+                className="h-12 bg-input border-border text-foreground"
+              />
+              <span className="text-muted-foreground">to</span>
+              <Input
+                type="time"
+                value={data.workEnd}
+                onChange={(e) => updateData({ workEnd: e.target.value })}
+                className="h-12 bg-input border-border text-foreground"
+              />
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Flexible Work */}
-        <div className="flex items-center justify-between py-3 px-4 bg-muted/50 rounded-lg">
-          <div className="space-y-0.5">
-            <span className="text-sm font-medium">Flexible schedule</span>
-            <p className="text-xs text-muted-foreground">I can adjust my hours</p>
-          </div>
-          <Switch
-            checked={data.flexibleWork}
-            onCheckedChange={(checked) => updateData({ flexibleWork: checked })}
-          />
-        </div>
-
-        {/* Commute */}
-        <div className="space-y-3">
-          <label className="flex items-center gap-2 text-sm font-medium">
-            <Car className="h-4 w-4 text-primary" />
-            Commute time (one way)
-          </label>
-          <div className="flex items-center gap-3">
-            <Input
-              type="number"
-              value={data.commuteMinutes}
-              onChange={(e) => updateData({ commuteMinutes: parseInt(e.target.value) || 0 })}
-              className="h-12 bg-input border-border text-foreground w-24"
-              min={0}
-              max={180}
+        {/* Flexible Work — only for standard */}
+        {isStandard && (
+          <div className="flex items-center justify-between py-3 px-4 bg-muted/50 rounded-lg">
+            <div className="space-y-0.5">
+              <span className="text-sm font-medium">Flexible schedule</span>
+              <p className="text-xs text-muted-foreground">I can adjust my hours</p>
+            </div>
+            <Switch
+              checked={data.flexibleWork}
+              onCheckedChange={(checked) => updateData({ flexibleWork: checked })}
             />
-            <span className="text-muted-foreground">minutes</span>
           </div>
-        </div>
+        )}
+
+        {/* Shift Work info */}
+        {isShiftWork && (
+          <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
+            <p className="text-sm text-muted-foreground">
+              📋 Each week, you'll be able to input your shifts in the calendar.
+              We'll build your training and rituals around whatever hours you're working that week.
+            </p>
+          </div>
+        )}
+
+        {/* FIFO info */}
+        {isFifo && (
+          <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
+            <p className="text-sm text-muted-foreground">
+              🔄 We'll build your schedule for your home period first.
+              You can toggle between <span className="font-medium text-foreground">home</span> and <span className="font-medium text-foreground">on-site</span> modes
+              from the calendar to switch your routine.
+            </p>
+          </div>
+        )}
 
         {/* Training Window */}
         <div className="space-y-3">
