@@ -34,6 +34,7 @@ export default function CalendarPage() {
     getDragOffset,
     isDragging,
     isAnyDragging,
+    wasJustDragged,
   } = useBlockDrag(blocks, setBlocks, user?.id);
 
   useEffect(() => {
@@ -236,6 +237,7 @@ export default function CalendarPage() {
                         onTouchEnd={onBlockTouchEnd}
                         onMouseDown={(e) => onBlockMouseDown(block.id, e)}
                         onClick={() => {
+                          if (wasJustDragged()) return;
                           if (
                             block.block_type === "training" &&
                             block.training_day_id
