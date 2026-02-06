@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { format, startOfWeek, addDays, isSameDay, parseISO } from "date-fns";
+import { format, startOfWeek, addDays, isSameDay } from "date-fns";
 import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,17 +8,8 @@ import { MobileLayout } from "@/components/layout/MobileLayout";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-interface ScheduleBlock {
-  id: string;
-  block_type: string;
-  title: string;
-  start_time: string;
-  end_time: string;
-  day_of_week: number;
-  is_locked: boolean;
-  training_day_id: string | null;
-}
+import { useBlockDrag, type ScheduleBlock } from "@/hooks/useBlockDrag";
+import { DraggableBlock } from "@/components/calendar/DraggableBlock";
 
 // Time slots from 5 AM to 11 PM
 const HOURS = Array.from({ length: 19 }, (_, i) => i + 5);
@@ -29,9 +19,18 @@ export default function CalendarPage() {
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date()));
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
   const [selectedBlock, setSelectedBlock] = useState<ScheduleBlock | null>(null);
-  
+
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  const {
+    onBlockTouchStart,
+    onBlockTouchMove,
+    onBlockTouchEnd,
+    getDragOffset,
+    isDragging,
+    isAnyDragging,
+  } = useBlockDrag(blocks, setBlocks, user?.id);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -57,13 +56,8 @@ export default function CalendarPage() {
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
-  const goToPreviousWeek = () => {
-    setWeekStart(addDays(weekStart, -7));
-  };
-
-  const goToNextWeek = () => {
-    setWeekStart(addDays(weekStart, 7));
-  };
+  const goToPreviousWeek = () => setWeekStart(addDays(weekStart, -7));
+  const goToNextWeek = () => setWeekStart(addDays(weekStart, 7));
 
   const getBlockColor = (type: string) => {
     switch (type) {
@@ -79,7 +73,6 @@ export default function CalendarPage() {
         return "bg-sky-500/20 border-sky-500/50 text-sky-300";
       case "wake":
         return "bg-amber-500/20 border-amber-500/50 text-amber-300";
-      // Note: "wake" blocks are no longer generated but kept for legacy data
       case "sleep":
         return "bg-indigo-500/10 border-indigo-500/30 text-indigo-300";
       case "commute":
@@ -97,20 +90,17 @@ export default function CalendarPage() {
   const getBlockStyle = (block: ScheduleBlock) => {
     const startHour = parseTime(block.start_time);
     const endHour = parseTime(block.end_time);
-    
-    // Handle overnight blocks (e.g., sleep from 22:00 to 06:00)
+
     let duration = endHour - startHour;
     if (duration <= 0) {
-      // For overnight blocks, just show until midnight
       duration = 24 - startHour;
     }
-    
-    // Only show blocks within visible hours (5 AM to 11 PM)
+
     if (startHour < 5 || startHour >= 23) return null;
-    
+
     const top = (startHour - 5) * HOUR_HEIGHT;
-    const height = Math.max(duration * HOUR_HEIGHT, 20); // Minimum height
-    
+    const height = Math.max(duration * HOUR_HEIGHT, 20);
+
     return { top, height };
   };
 
@@ -138,7 +128,8 @@ export default function CalendarPage() {
               <ChevronLeft className="h-5 w-5" />
             </Button>
             <h2 className="text-sm font-medium">
-              {format(weekStart, "MMM d")} – {format(addDays(weekStart, 6), "MMM d")}
+              {format(weekStart, "MMM d")} –{" "}
+              {format(addDays(weekStart, 6), "MMM d")}
             </h2>
             <Button variant="ghost" size="icon" onClick={goToNextWeek}>
               <ChevronRight className="h-5 w-5" />
@@ -148,7 +139,7 @@ export default function CalendarPage() {
 
         {/* Week Header */}
         <div className="flex border-b border-border/50 shrink-0">
-          <div className="w-10 shrink-0" /> {/* Time column spacer */}
+          <div className="w-10 shrink-0" />
           {weekDays.map((day) => {
             const isToday = isSameDay(day, new Date());
             return (
@@ -176,7 +167,10 @@ export default function CalendarPage() {
         </div>
 
         {/* Weekly Grid */}
-        <div className="flex-1 overflow-auto">
+        <div
+          className="flex-1 overflow-auto"
+          style={{ touchAction: isAnyDragging ? "none" : "auto" }}
+        >
           <div className="flex min-h-full">
             {/* Time Column */}
             <div className="w-10 shrink-0 border-r border-border/30">
@@ -186,14 +180,18 @@ export default function CalendarPage() {
                   className="h-12 flex items-start justify-end pr-1 pt-0.5"
                 >
                   <span className="text-[10px] text-muted-foreground">
-                    {hour > 12 ? `${hour - 12}p` : hour === 12 ? "12p" : `${hour}a`}
+                    {hour > 12
+                      ? `${hour - 12}p`
+                      : hour === 12
+                      ? "12p"
+                      : `${hour}a`}
                   </span>
                 </div>
               ))}
             </div>
 
             {/* Day Columns */}
-            {weekDays.map((day, dayIndex) => {
+            {weekDays.map((day) => {
               const dayBlocks = blocks.filter(
                 (b) => b.day_of_week === day.getDay()
               );
@@ -219,40 +217,30 @@ export default function CalendarPage() {
                   {dayBlocks.map((block) => {
                     const style = getBlockStyle(block);
                     if (!style) return null;
-
-                    // Filter out sleep blocks from view
                     if (block.block_type === "sleep") return null;
 
                     return (
-                      <motion.div
+                      <DraggableBlock
                         key={block.id}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className={cn(
-                          "absolute left-0.5 right-0.5 rounded-sm border-l-2 px-0.5 py-0.5 overflow-hidden cursor-pointer transition-all hover:z-10 hover:shadow-lg",
-                          getBlockColor(block.block_type)
-                        )}
-                        style={{
-                          top: style.top,
-                          height: style.height,
-                        }}
+                        block={block}
+                        style={style}
+                        colorClass={getBlockColor(block.block_type)}
+                        isDragging={isDragging(block.id)}
+                        dragOffset={getDragOffset(block.id)}
+                        onTouchStart={(e) => onBlockTouchStart(block.id, e)}
+                        onTouchMove={onBlockTouchMove}
+                        onTouchEnd={onBlockTouchEnd}
                         onClick={() => {
-                          if (block.block_type === "training" && block.training_day_id) {
+                          if (
+                            block.block_type === "training" &&
+                            block.training_day_id
+                          ) {
                             navigate(`/workout/${block.training_day_id}`);
                           } else {
                             setSelectedBlock(block);
                           }
                         }}
-                      >
-                        <div className="flex items-start gap-0.5">
-                          {block.is_locked && (
-                            <Lock className="h-2 w-2 shrink-0 mt-0.5 opacity-60" />
-                          )}
-                          <span className="text-[9px] font-medium leading-tight line-clamp-2">
-                            {block.title}
-                          </span>
-                        </div>
-                      </motion.div>
+                      />
                     );
                   })}
                 </div>
@@ -262,12 +250,8 @@ export default function CalendarPage() {
         </div>
 
         {/* Block Detail Modal */}
-        {selectedBlock && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="absolute bottom-20 left-4 right-4 p-4 bg-card border border-border rounded-lg shadow-xl z-20"
-          >
+        {selectedBlock && !isAnyDragging && (
+          <div className="absolute bottom-20 left-4 right-4 p-4 bg-card border border-border rounded-lg shadow-xl z-20 animate-fade-in">
             <div className="flex items-start justify-between mb-2">
               <div>
                 <h3 className="font-semibold flex items-center gap-2">
@@ -277,7 +261,8 @@ export default function CalendarPage() {
                   )}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {formatTimeShort(selectedBlock.start_time)} – {formatTimeShort(selectedBlock.end_time)}
+                  {formatTimeShort(selectedBlock.start_time)} –{" "}
+                  {formatTimeShort(selectedBlock.end_time)}
                 </p>
               </div>
               <Button
@@ -305,7 +290,7 @@ export default function CalendarPage() {
                 </span>
               )}
             </div>
-          </motion.div>
+          </div>
         )}
 
         {/* Legend */}
@@ -326,6 +311,8 @@ export default function CalendarPage() {
               <div className="w-2 h-2 rounded-sm bg-violet-500/40" />
               <span>Evening</span>
             </div>
+            <span className="mx-2">•</span>
+            <span>Long press to drag</span>
           </div>
         </div>
       </div>
