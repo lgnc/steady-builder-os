@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { InlineJournalEntry } from "./InlineJournalEntry";
 
 const DEFAULT_MORNING_ITEMS = [
   "Hydrate (500ml water)",
@@ -57,6 +58,7 @@ export function RoutineChecklistSheet({
   const [streak, setStreak] = useState(0);
   const [allCompleteCelebrated, setAllCompleteCelebrated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [journalView, setJournalView] = useState<"morning" | "evening" | null>(null);
 
   const today = format(new Date(), "yyyy-MM-dd");
   const completedCount = completedIds.size;
@@ -65,6 +67,28 @@ export function RoutineChecklistSheet({
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
   const routineLabel = routineType === "morning_routine" ? "Morning Routine" : "Evening Routine";
+
+  // Detect if an item title is a journal entry link
+  const isJournalItem = (title: string) => {
+    const lower = title.toLowerCase();
+    return lower.includes("journal") || lower.includes("gratitude journal");
+  };
+
+  const getJournalType = (): "morning" | "evening" => {
+    return routineType === "morning_routine" ? "morning" : "evening";
+  };
+
+  const handleJournalItemClick = (itemId: string) => {
+    setJournalView(getJournalType());
+  };
+
+  const handleJournalComplete = (itemId: string) => {
+    // Auto-check the journal item after completing the entry
+    if (!completedIds.has(itemId)) {
+      toggleItem(itemId);
+    }
+    setJournalView(null);
+  };
 
   // Seed default items for existing users who have none
   const seedDefaults = useCallback(async () => {
@@ -127,6 +151,7 @@ export function RoutineChecklistSheet({
   useEffect(() => {
     if (open) {
       setAllCompleteCelebrated(false);
+      setJournalView(null);
       fetchData();
     }
   }, [open, fetchData]);
@@ -326,92 +351,119 @@ export function RoutineChecklistSheet({
           </div>
         </div>
 
-        {/* Checklist */}
-        {loading ? (
-          <div className="py-8 text-center text-muted-foreground text-sm animate-pulse">
-            Loading...
-          </div>
-        ) : items.length === 0 ? (
-          <div className="py-8 text-center text-muted-foreground text-sm">
-            No checklist items yet. Tap the pencil icon to add some.
-          </div>
+        {/* Journal inline view */}
+        {journalView ? (
+          <InlineJournalEntry
+            userId={userId}
+            type={journalView}
+            onComplete={() => {
+              // Find the journal item and auto-check it
+              const journalItem = items.find((i) => isJournalItem(i.title));
+              if (journalItem) {
+                handleJournalComplete(journalItem.id);
+              } else {
+                setJournalView(null);
+              }
+            }}
+            onBack={() => setJournalView(null)}
+          />
         ) : (
-          <div className="space-y-1">
-            <AnimatePresence mode="popLayout">
-              {items.map((item) => {
-                const checked = completedIds.has(item.id);
-                return (
-                  <motion.div
-                    key={item.id}
-                    layout
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, x: -40 }}
-                    className={cn(
-                      "flex items-center gap-3 py-3 px-3 rounded-lg transition-colors",
-                      checked ? "bg-primary/5" : "bg-transparent",
-                      !editMode && "active:bg-muted/50"
-                    )}
-                  >
-                    {!editMode ? (
-                      <>
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={() => toggleItem(item.id)}
-                          className="h-5 w-5"
-                        />
-                        <span
-                          className={cn(
-                            "flex-1 text-sm transition-all",
-                            checked && "line-through text-muted-foreground"
-                          )}
-                        >
-                          {item.title}
-                        </span>
-                        {checked && (
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            className="text-primary"
-                          >
-                            <Check className="h-4 w-4" />
-                          </motion.div>
+          <>
+            {/* Checklist */}
+            {loading ? (
+              <div className="py-8 text-center text-muted-foreground text-sm animate-pulse">
+                Loading...
+              </div>
+            ) : items.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground text-sm">
+                No checklist items yet. Tap the pencil icon to add some.
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <AnimatePresence mode="popLayout">
+                  {items.map((item) => {
+                    const checked = completedIds.has(item.id);
+                    const isJournal = isJournalItem(item.title);
+                    return (
+                      <motion.div
+                        key={item.id}
+                        layout
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, x: -40 }}
+                        className={cn(
+                          "flex items-center gap-3 py-3 px-3 rounded-lg transition-colors",
+                          checked ? "bg-primary/5" : "bg-transparent",
+                          !editMode && "active:bg-muted/50"
                         )}
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex flex-col gap-0.5">
-                          <button
-                            onClick={() => moveItem(item.id, "up")}
-                            className="p-0.5 text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            <ChevronUp className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => moveItem(item.id, "down")}
-                            className="p-0.5 text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            <ChevronDown className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                        <span className="flex-1 text-sm">{item.title}</span>
-                        <button
-                          onClick={() => deleteItem(item.id)}
-                          className="p-1.5 text-destructive/70 hover:text-destructive transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </>
-                    )}
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
-          </div>
+                      >
+                        {!editMode ? (
+                          <>
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={() => toggleItem(item.id)}
+                              className="h-5 w-5"
+                            />
+                            <span
+                              onClick={() => {
+                                if (isJournal && !checked) {
+                                  handleJournalItemClick(item.id);
+                                }
+                              }}
+                              className={cn(
+                                "flex-1 text-sm transition-all",
+                                checked && "line-through text-muted-foreground",
+                                isJournal && !checked && "text-primary underline underline-offset-2 cursor-pointer"
+                              )}
+                            >
+                              {item.title}
+                            </span>
+                            {checked && (
+                              <motion.div
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                className="text-primary"
+                              >
+                                <Check className="h-4 w-4" />
+                              </motion.div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex flex-col gap-0.5">
+                              <button
+                                onClick={() => moveItem(item.id, "up")}
+                                className="p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                <ChevronUp className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => moveItem(item.id, "down")}
+                                className="p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                <ChevronDown className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <span className="flex-1 text-sm">{item.title}</span>
+                            <button
+                              onClick={() => deleteItem(item.id)}
+                              className="p-1.5 text-destructive/70 hover:text-destructive transition-colors"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
+            )}
+          </>
         )}
 
         {/* Add new item (edit mode) */}
-        {editMode && (
+        {editMode && !journalView && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
