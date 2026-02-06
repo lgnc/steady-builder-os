@@ -10,7 +10,9 @@ import { useToast } from "@/hooks/use-toast";
 
 // Step components
 import { SleepStep } from "@/components/onboarding/SleepStep";
+import { WorkTypeStep } from "@/components/onboarding/WorkTypeStep";
 import { WorkStep } from "@/components/onboarding/WorkStep";
+import { GymCommuteStep } from "@/components/onboarding/GymCommuteStep";
 import { TrainingStep } from "@/components/onboarding/TrainingStep";
 import { ProgramStep } from "@/components/onboarding/ProgramStep";
 import { GoalsStep } from "@/components/onboarding/GoalsStep";
@@ -24,6 +26,9 @@ export interface OnboardingData {
   sleepDuration: number;
   bedtime: string;
   
+  // Work Type
+  workType: "standard" | "shift_work" | "fifo";
+  
   // Work
   workStart: string;
   workEnd: string;
@@ -31,6 +36,9 @@ export interface OnboardingData {
   flexibleWork: boolean;
   preferredTrainingWindow: "morning" | "afternoon" | "evening";
   restDays: string[];
+  
+  // Gym Commute
+  gymCommuteMinutes: number;
   
   // Training
   experienceTier: "absolute_amateur" | "beginner" | "intermediate" | "advanced";
@@ -56,18 +64,20 @@ export interface OnboardingData {
   activityLevel: string;
 }
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 10;
 
 const defaultData: OnboardingData = {
   wakeTime: "06:00",
   sleepDuration: 8,
   bedtime: "22:00",
+  workType: "standard",
   workStart: "09:00",
   workEnd: "17:00",
   commuteMinutes: 30,
   flexibleWork: false,
   preferredTrainingWindow: "morning",
   restDays: ["sunday"],
+  gymCommuteMinutes: 15,
   experienceTier: "beginner",
   selectedProgram: "3_day_strength",
   primaryGoals: [],
@@ -179,12 +189,14 @@ export default function OnboardingPage() {
           wake_time: data.wakeTime,
           sleep_duration: data.sleepDuration,
           bedtime: data.bedtime,
+          work_type: data.workType,
           work_start: data.workStart,
           work_end: data.workEnd,
           commute_minutes: data.commuteMinutes,
           flexible_work: data.flexibleWork,
           preferred_training_window: data.preferredTrainingWindow,
           rest_days: data.restDays,
+          gym_commute_minutes: data.gymCommuteMinutes,
           experience_tier: data.experienceTier,
           selected_program: data.selectedProgram,
           primary_goals: data.primaryGoals,
@@ -302,7 +314,22 @@ export default function OnboardingPage() {
 
         // Find the training day to get the name
         const td = trainingDaysData?.find((t) => t.id === trainingDayMap[day]);
+        const gymCommute = data.gymCommuteMinutes || 0;
 
+        // Commute to gym
+        if (gymCommute > 0) {
+          blocks.push({
+            user_id: user.id,
+            block_type: "commute",
+            title: "Drive to Gym",
+            start_time: addMinutes(trainingStart, -gymCommute),
+            end_time: trainingStart,
+            day_of_week: day,
+            is_locked: true,
+          });
+        }
+
+        // Training session
         blocks.push({
           user_id: user.id,
           block_type: "training",
@@ -313,6 +340,19 @@ export default function OnboardingPage() {
           is_locked: true,
           training_day_id: trainingDayMap[day],
         });
+
+        // Commute home
+        if (gymCommute > 0) {
+          blocks.push({
+            user_id: user.id,
+            block_type: "commute",
+            title: "Drive Home",
+            start_time: addMinutes(trainingStart, 60),
+            end_time: addMinutes(trainingStart, 60 + gymCommute),
+            day_of_week: day,
+            is_locked: true,
+          });
+        }
       }
 
       // Reading time
@@ -379,7 +419,9 @@ export default function OnboardingPage() {
 
   const stepTitles = [
     "Sleep & Recovery",
+    "Work Type",
     "Work & Time",
+    "Gym Commute",
     "Training Experience",
     "Select Program",
     "Your Goals",
@@ -422,13 +464,15 @@ export default function OnboardingPage() {
                   onDismissWarning={() => setShowSleepWarning(false)}
                 />
               )}
-              {step === 2 && <WorkStep data={data} updateData={updateData} />}
-              {step === 3 && <TrainingStep data={data} updateData={updateData} />}
-              {step === 4 && <ProgramStep data={data} updateData={updateData} />}
-              {step === 5 && <GoalsStep data={data} updateData={updateData} />}
-              {step === 6 && <FrictionStep data={data} updateData={updateData} />}
-              {step === 7 && <NutritionStep data={data} updateData={updateData} />}
-              {step === 8 && <ReviewStep data={data} />}
+              {step === 2 && <WorkTypeStep data={data} updateData={updateData} />}
+              {step === 3 && <WorkStep data={data} updateData={updateData} />}
+              {step === 4 && <GymCommuteStep data={data} updateData={updateData} />}
+              {step === 5 && <TrainingStep data={data} updateData={updateData} />}
+              {step === 6 && <ProgramStep data={data} updateData={updateData} />}
+              {step === 7 && <GoalsStep data={data} updateData={updateData} />}
+              {step === 8 && <FrictionStep data={data} updateData={updateData} />}
+              {step === 9 && <NutritionStep data={data} updateData={updateData} />}
+              {step === 10 && <ReviewStep data={data} />}
             </motion.div>
           </AnimatePresence>
         </div>

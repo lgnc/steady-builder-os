@@ -1,4 +1,4 @@
-import { Clock, Calendar, Target, Dumbbell, Moon, Sun } from "lucide-react";
+import { Clock, Calendar, Target, Dumbbell, Moon, Car } from "lucide-react";
 import { OnboardingData } from "@/pages/Onboarding";
 
 interface ReviewStepProps {
@@ -17,6 +17,12 @@ const experienceLabels: Record<string, string> = {
   beginner: "Beginner",
   intermediate: "Intermediate",
   advanced: "Advanced",
+};
+
+const workTypeLabels: Record<string, string> = {
+  standard: "Standard Hours",
+  shift_work: "Shift Work",
+  fifo: "FIFO / Roster",
 };
 
 const goalLabels: Record<string, string> = {
@@ -76,9 +82,15 @@ export function ReviewStep({ data }: ReviewStepProps) {
           </div>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Work hours</span>
-              <span className="font-medium">{data.workStart} - {data.workEnd}</span>
+              <span className="text-muted-foreground">Work type</span>
+              <span className="font-medium">{workTypeLabels[data.workType]}</span>
             </div>
+            {data.workType === "standard" && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Work hours</span>
+                <span className="font-medium">{data.workStart} - {data.workEnd}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Training window</span>
               <span className="font-medium capitalize">{data.preferredTrainingWindow}</span>
@@ -89,6 +101,28 @@ export function ReviewStep({ data }: ReviewStepProps) {
             </div>
           </div>
         </div>
+
+        {/* Gym Commute */}
+        {(data.gymCommuteMinutes ?? 0) > 0 && (
+          <div className="card-ritual">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 rounded-lg bg-muted">
+                <Car className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <h3 className="font-medium">Gym Commute</h3>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">One-way</span>
+                <span className="font-medium">{data.gymCommuteMinutes} min</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total per session</span>
+                <span className="font-medium">{60 + (data.gymCommuteMinutes ?? 0) * 2} min</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Program */}
         <div className="card-ritual">
