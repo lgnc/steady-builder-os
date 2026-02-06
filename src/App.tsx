@@ -10,6 +10,7 @@ import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import Calendar from "./pages/Calendar";
 import Training from "./pages/Training";
+import Workout from "./pages/Workout";
 import Nutrition from "./pages/Nutrition";
 import Journal from "./pages/Journal";
 import Profile from "./pages/Profile";
@@ -31,6 +32,7 @@ const App = () => (
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/calendar" element={<Calendar />} />
             <Route path="/training" element={<Training />} />
+            <Route path="/workout/:trainingDayId" element={<Workout />} />
             <Route path="/nutrition" element={<Nutrition />} />
             <Route path="/journal" element={<Journal />} />
             <Route path="/profile" element={<Profile />} />

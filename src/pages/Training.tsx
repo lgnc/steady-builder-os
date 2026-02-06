@@ -326,7 +326,7 @@ export default function TrainingPage() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.05 }}
-                      onClick={() => setSelectedDay(day)}
+                      onClick={() => navigate(`/workout/${day.id}`)}
                       className={cn(
                         "w-full text-left p-4 rounded-lg border transition-all duration-200",
                         completed

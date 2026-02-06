@@ -184,6 +184,7 @@ export type Database = {
           is_locked: boolean | null
           start_time: string
           title: string
+          training_day_id: string | null
           updated_at: string
           user_id: string
         }
@@ -197,6 +198,7 @@ export type Database = {
           is_locked?: boolean | null
           start_time: string
           title: string
+          training_day_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -210,10 +212,19 @@ export type Database = {
           is_locked?: boolean | null
           start_time?: string
           title?: string
+          training_day_id?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "schedule_blocks_training_day_id_fkey"
+            columns: ["training_day_id"]
+            isOneToOne: false
+            referencedRelation: "training_days"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       streaks: {
         Row: {
@@ -395,6 +406,60 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "user_training_schedule_training_day_id_fkey"
+            columns: ["training_day_id"]
+            isOneToOne: false
+            referencedRelation: "training_days"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workout_logs: {
+        Row: {
+          created_at: string
+          exercise_id: string
+          id: string
+          reps_completed: number | null
+          set_number: number
+          training_day_id: string
+          updated_at: string
+          user_id: string
+          week_number: number
+          weight_kg: number | null
+        }
+        Insert: {
+          created_at?: string
+          exercise_id: string
+          id?: string
+          reps_completed?: number | null
+          set_number: number
+          training_day_id: string
+          updated_at?: string
+          user_id: string
+          week_number?: number
+          weight_kg?: number | null
+        }
+        Update: {
+          created_at?: string
+          exercise_id?: string
+          id?: string
+          reps_completed?: number | null
+          set_number?: number
+          training_day_id?: string
+          updated_at?: string
+          user_id?: string
+          week_number?: number
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_logs_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_logs_training_day_id_fkey"
             columns: ["training_day_id"]
             isOneToOne: false
             referencedRelation: "training_days"
