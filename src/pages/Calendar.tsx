@@ -9,6 +9,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useBlockDrag, type ScheduleBlock } from "@/hooks/useBlockDrag";
+import { useBlockResize } from "@/hooks/useBlockResize";
 import { DraggableBlock } from "@/components/calendar/DraggableBlock";
 import { RoutineChecklistSheet } from "@/components/calendar/RoutineChecklistSheet";
 
@@ -36,6 +37,15 @@ export default function CalendarPage() {
     isAnyDragging,
     wasJustDragged,
   } = useBlockDrag(blocks, setBlocks, user?.id);
+
+  const {
+    onResizeMouseDown,
+    onResizeTouchStart,
+    getResizePreview,
+    isResizing,
+    isAnyResizing,
+    wasJustResized,
+  } = useBlockResize(blocks, setBlocks, user?.id);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -174,7 +184,7 @@ export default function CalendarPage() {
         {/* Weekly Grid */}
         <div
           className="flex-1 overflow-auto"
-          style={{ touchAction: isAnyDragging ? "none" : "auto" }}
+          style={{ touchAction: isAnyDragging || isAnyResizing ? "none" : "auto" }}
         >
           <div className="flex min-h-full">
             {/* Time Column */}
@@ -224,37 +234,52 @@ export default function CalendarPage() {
                     if (!style) return null;
                     if (block.block_type === "sleep") return null;
 
-                    return (
-                      <DraggableBlock
-                        key={block.id}
-                        block={block}
-                        style={style}
-                        colorClass={getBlockColor(block.block_type)}
-                        isDragging={isDragging(block.id)}
-                        dragOffset={getDragOffset(block.id)}
-                        onTouchStart={(e) => onBlockTouchStart(block.id, e)}
-                        onTouchMove={onBlockTouchMove}
-                        onTouchEnd={onBlockTouchEnd}
-                        onMouseDown={(e) => onBlockMouseDown(block.id, e)}
-                        onClick={() => {
-                          if (wasJustDragged()) return;
-                          if (
-                            block.block_type === "training" &&
-                            block.training_day_id
-                          ) {
-                            navigate(`/workout/${block.training_day_id}`);
-                          } else if (
-                            block.block_type === "morning_routine" ||
-                            block.block_type === "evening_routine"
-                          ) {
-                            setRoutineSheetType(block.block_type);
-                            setRoutineSheetOpen(true);
-                          } else {
-                            setSelectedBlock(block);
+                      const isWorkBlock = block.block_type === "work";
+
+                      return (
+                        <DraggableBlock
+                          key={block.id}
+                          block={block}
+                          style={style}
+                          colorClass={getBlockColor(block.block_type)}
+                          isDragging={isDragging(block.id)}
+                          dragOffset={getDragOffset(block.id)}
+                          isResizing={isResizing(block.id)}
+                          resizePreview={getResizePreview(block.id)}
+                          resizable={isWorkBlock}
+                          onTouchStart={(e) => onBlockTouchStart(block.id, e)}
+                          onTouchMove={onBlockTouchMove}
+                          onTouchEnd={onBlockTouchEnd}
+                          onMouseDown={(e) => onBlockMouseDown(block.id, e)}
+                          onResizeMouseDown={
+                            isWorkBlock
+                              ? (edge, e) => onResizeMouseDown(block.id, edge, e)
+                              : undefined
                           }
-                        }}
-                      />
-                    );
+                          onResizeTouchStart={
+                            isWorkBlock
+                              ? (edge, e) => onResizeTouchStart(block.id, edge, e)
+                              : undefined
+                          }
+                          onClick={() => {
+                            if (wasJustDragged() || wasJustResized()) return;
+                            if (
+                              block.block_type === "training" &&
+                              block.training_day_id
+                            ) {
+                              navigate(`/workout/${block.training_day_id}`);
+                            } else if (
+                              block.block_type === "morning_routine" ||
+                              block.block_type === "evening_routine"
+                            ) {
+                              setRoutineSheetType(block.block_type);
+                              setRoutineSheetOpen(true);
+                            } else {
+                              setSelectedBlock(block);
+                            }
+                          }}
+                        />
+                      );
                   })}
                 </div>
               );
@@ -263,7 +288,7 @@ export default function CalendarPage() {
         </div>
 
         {/* Block Detail Modal */}
-        {selectedBlock && !isAnyDragging && (
+        {selectedBlock && !isAnyDragging && !isAnyResizing && (
           <div className="absolute bottom-20 left-4 right-4 p-4 bg-card border border-border rounded-lg shadow-xl z-20 animate-fade-in">
             <div className="flex items-start justify-between mb-2">
               <div>
