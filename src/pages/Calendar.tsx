@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useBlockDrag, type ScheduleBlock } from "@/hooks/useBlockDrag";
 import { DraggableBlock } from "@/components/calendar/DraggableBlock";
+import { RoutineChecklistSheet } from "@/components/calendar/RoutineChecklistSheet";
 
 // Time slots from 5 AM to 11 PM
 const HOURS = Array.from({ length: 19 }, (_, i) => i + 5);
@@ -19,6 +20,8 @@ export default function CalendarPage() {
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date()));
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
   const [selectedBlock, setSelectedBlock] = useState<ScheduleBlock | null>(null);
+  const [routineSheetOpen, setRoutineSheetOpen] = useState(false);
+  const [routineSheetType, setRoutineSheetType] = useState<string>("morning_routine");
 
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -236,6 +239,12 @@ export default function CalendarPage() {
                             block.training_day_id
                           ) {
                             navigate(`/workout/${block.training_day_id}`);
+                          } else if (
+                            block.block_type === "morning_routine" ||
+                            block.block_type === "evening_routine"
+                          ) {
+                            setRoutineSheetType(block.block_type);
+                            setRoutineSheetOpen(true);
                           } else {
                             setSelectedBlock(block);
                           }
@@ -316,6 +325,16 @@ export default function CalendarPage() {
           </div>
         </div>
       </div>
+
+      {/* Routine Checklist Sheet */}
+      {user && (
+        <RoutineChecklistSheet
+          open={routineSheetOpen}
+          onOpenChange={setRoutineSheetOpen}
+          userId={user.id}
+          routineType={routineSheetType}
+        />
+      )}
     </MobileLayout>
   );
 }

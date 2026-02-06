@@ -220,6 +220,9 @@ export default function OnboardingPage() {
       // Generate initial schedule
       await generateSchedule();
 
+      // Seed default morning routine checklist items
+      await seedDefaultChecklistItems();
+
       toast({
         title: "Structure installed",
         description: "Your operating system is ready.",
@@ -415,6 +418,19 @@ export default function OnboardingPage() {
     }
   };
 
+  const seedDefaultChecklistItems = async () => {
+    if (!user) return;
+
+    const items = DEFAULT_MORNING_ITEMS.map((title, idx) => ({
+      user_id: user.id,
+      routine_type: "morning_routine",
+      title,
+      sort_order: idx,
+    }));
+
+    await supabase.from("routine_checklist_items").insert(items);
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -539,5 +555,12 @@ function addMinutes(time: string, minutes: number): string {
   return `${newHours.toString().padStart(2, "0")}:${newMins.toString().padStart(2, "0")}`;
 }
 
-// getTrainingTime is no longer needed — training time is now calculated
-// dynamically in generateSchedule based on morning routine end, commute, and work hours.
+// Default morning routine checklist items
+const DEFAULT_MORNING_ITEMS = [
+  "Hydrate (500ml water)",
+  "Make bed",
+  "Cold shower / wash face",
+  "10-min stretch or mobility",
+  "Morning journal entry",
+  "Review today's schedule",
+];

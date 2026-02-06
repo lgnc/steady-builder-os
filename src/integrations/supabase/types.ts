@@ -179,6 +179,68 @@ export type Database = {
         }
         Relationships: []
       }
+      routine_checklist_completions: {
+        Row: {
+          checklist_item_id: string
+          completed_at: string
+          completed_date: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          checklist_item_id: string
+          completed_at?: string
+          completed_date?: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          checklist_item_id?: string
+          completed_at?: string
+          completed_date?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routine_checklist_completions_checklist_item_id_fkey"
+            columns: ["checklist_item_id"]
+            isOneToOne: false
+            referencedRelation: "routine_checklist_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      routine_checklist_items: {
+        Row: {
+          created_at: string
+          id: string
+          routine_type: string
+          sort_order: number
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          routine_type?: string
+          sort_order?: number
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          routine_type?: string
+          sort_order?: number
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       schedule_blocks: {
         Row: {
           block_type: string
