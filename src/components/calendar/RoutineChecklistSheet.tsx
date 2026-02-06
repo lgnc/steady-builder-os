@@ -14,6 +14,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
+const DEFAULT_MORNING_ITEMS = [
+  "Hydrate (500ml water)",
+  "Make bed",
+  "Cold shower / wash face",
+  "10-min stretch or mobility",
+  "Morning journal entry",
+  "Review today's schedule",
+];
+
+const DEFAULT_EVENING_ITEMS = [
+  "Prepare tomorrow's clothes",
+  "Review tomorrow's schedule",
+  "10-min reading",
+  "Gratitude journal",
+  "Lights out",
+];
+
 interface ChecklistItem {
   id: string;
   title: string;
@@ -49,6 +66,24 @@ export function RoutineChecklistSheet({
 
   const routineLabel = routineType === "morning_routine" ? "Morning Routine" : "Evening Routine";
 
+  // Seed default items for existing users who have none
+  const seedDefaults = useCallback(async () => {
+    const defaults = routineType === "morning_routine" ? DEFAULT_MORNING_ITEMS : DEFAULT_EVENING_ITEMS;
+    const rows = defaults.map((title, i) => ({
+      user_id: userId,
+      routine_type: routineType,
+      title,
+      sort_order: i,
+    }));
+
+    const { data } = await supabase
+      .from("routine_checklist_items")
+      .insert(rows)
+      .select("id, title, sort_order");
+
+    return data ?? [];
+  }, [userId, routineType]);
+
   // Fetch items + completions + streak
   const fetchData = useCallback(async () => {
     if (!userId || !open) return;
@@ -74,13 +109,20 @@ export function RoutineChecklistSheet({
         .maybeSingle(),
     ]);
 
-    if (itemsRes.data) setItems(itemsRes.data);
+    let fetchedItems = itemsRes.data ?? [];
+
+    // Auto-seed defaults for existing users with no items
+    if (fetchedItems.length === 0) {
+      fetchedItems = await seedDefaults();
+    }
+
+    setItems(fetchedItems);
     if (completionsRes.data) {
       setCompletedIds(new Set(completionsRes.data.map((c: any) => c.checklist_item_id)));
     }
     if (streakRes.data) setStreak(streakRes.data.current_streak ?? 0);
     setLoading(false);
-  }, [userId, routineType, today, open]);
+  }, [userId, routineType, today, open, seedDefaults]);
 
   useEffect(() => {
     if (open) {
