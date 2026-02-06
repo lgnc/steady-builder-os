@@ -30,6 +30,7 @@ export default function CalendarPage() {
     onBlockTouchStart,
     onBlockTouchMove,
     onBlockTouchEnd,
+    onBlockMouseDown,
     getDragOffset,
     isDragging,
     isAnyDragging,
@@ -102,7 +103,7 @@ export default function CalendarPage() {
     if (startHour < 5 || startHour >= 23) return null;
 
     const top = (startHour - 5) * HOUR_HEIGHT;
-    const height = Math.max(duration * HOUR_HEIGHT, 20);
+    const height = duration * HOUR_HEIGHT;
 
     return { top, height };
   };
@@ -233,6 +234,7 @@ export default function CalendarPage() {
                         onTouchStart={(e) => onBlockTouchStart(block.id, e)}
                         onTouchMove={onBlockTouchMove}
                         onTouchEnd={onBlockTouchEnd}
+                        onMouseDown={(e) => onBlockMouseDown(block.id, e)}
                         onClick={() => {
                           if (
                             block.block_type === "training" &&

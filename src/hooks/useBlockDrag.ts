@@ -39,7 +39,6 @@ function getLinkedGroup(block: ScheduleBlock, dayBlocks: ScheduleBlock[]): strin
   const ids = new Set<string>([block.id]);
 
   if (block.block_type === "training") {
-    // Adjacent commute blocks
     dayBlocks.forEach((b) => {
       if (b.block_type === "commute") {
         if (b.end_time === block.start_time || b.start_time === block.end_time) {
@@ -48,12 +47,10 @@ function getLinkedGroup(block: ScheduleBlock, dayBlocks: ScheduleBlock[]): strin
       }
     });
   } else if (block.block_type === "commute") {
-    // Find the linked training block → then gather full training group
     dayBlocks.forEach((t) => {
       if (t.block_type === "training") {
         if (block.end_time === t.start_time || block.start_time === t.end_time) {
           ids.add(t.id);
-          // Find the other commute block around this training
           dayBlocks.forEach((c) => {
             if (c.block_type === "commute" && c.id !== block.id) {
               if (c.end_time === t.start_time || c.start_time === t.end_time) {
@@ -65,7 +62,6 @@ function getLinkedGroup(block: ScheduleBlock, dayBlocks: ScheduleBlock[]): strin
       }
     });
   } else if (block.block_type === "reading" || block.block_type === "evening_routine") {
-    // Evening group always moves together
     dayBlocks.forEach((b) => {
       if (
         (b.block_type === "reading" || b.block_type === "evening_routine") &&
@@ -75,7 +71,6 @@ function getLinkedGroup(block: ScheduleBlock, dayBlocks: ScheduleBlock[]): strin
       }
     });
   }
-  // morning_routine and work move solo
 
   return Array.from(ids);
 }
@@ -92,7 +87,6 @@ export function useBlockDrag(
     deltaMinutes: number;
   } | null>(null);
 
-  // Refs for data the document-level handlers need
   const dragRef = useRef<{
     blockId: string;
     linkedBlockIds: string[];
@@ -111,53 +105,56 @@ export function useBlockDrag(
 
   const latestDelta = useRef(0);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  const pointerStartPos = useRef<{ x: number; y: number } | null>(null);
 
-  // --- Touch start on individual block ---
+  // --- Initiate drag (shared logic for touch and mouse) ---
+  const initiateDrag = useCallback((blockId: string, clientY: number) => {
+    const block = blocksRef.current.find((b) => b.id === blockId);
+    if (!block) return;
+
+    const dayBlocks = blocksRef.current.filter(
+      (b) => b.day_of_week === block.day_of_week
+    );
+    const linkedIds = getLinkedGroup(block, dayBlocks);
+
+    dragRef.current = {
+      blockId,
+      linkedBlockIds: linkedIds,
+      startY: clientY,
+      dayOfWeek: block.day_of_week,
+    };
+
+    latestDelta.current = 0;
+
+    setActiveDrag({
+      linkedBlockIds: linkedIds,
+      deltaMinutes: 0,
+    });
+
+    if (navigator.vibrate) navigator.vibrate(50);
+  }, []);
+
+  // --- Touch events ---
   const onBlockTouchStart = useCallback(
     (blockId: string, e: React.TouchEvent) => {
       const touch = e.touches[0];
-      touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+      pointerStartPos.current = { x: touch.clientX, y: touch.clientY };
 
       longPressTimer.current = setTimeout(() => {
-        const block = blocksRef.current.find((b) => b.id === blockId);
-        if (!block) return;
-
-        const dayBlocks = blocksRef.current.filter(
-          (b) => b.day_of_week === block.day_of_week
-        );
-        const linkedIds = getLinkedGroup(block, dayBlocks);
-
-        dragRef.current = {
-          blockId,
-          linkedBlockIds: linkedIds,
-          startY: touch.clientY,
-          dayOfWeek: block.day_of_week,
-        };
-
-        latestDelta.current = 0;
-
-        setActiveDrag({
-          linkedBlockIds: linkedIds,
-          deltaMinutes: 0,
-        });
-
-        // Haptic feedback
-        if (navigator.vibrate) navigator.vibrate(50);
+        initiateDrag(blockId, touch.clientY);
       }, 500);
     },
-    []
+    [initiateDrag]
   );
 
-  // Cancel long press if user moves finger early (scrolling)
   const onBlockTouchMove = useCallback(
     (e: React.TouchEvent) => {
-      if (activeDrag) return; // Already dragging; document listener handles it
+      if (activeDrag) return;
 
-      if (touchStartPos.current) {
+      if (pointerStartPos.current) {
         const touch = e.touches[0];
-        const dx = Math.abs(touch.clientX - touchStartPos.current.x);
-        const dy = Math.abs(touch.clientY - touchStartPos.current.y);
+        const dx = Math.abs(touch.clientX - pointerStartPos.current.x);
+        const dy = Math.abs(touch.clientY - pointerStartPos.current.y);
         if (dx > 8 || dy > 8) {
           if (longPressTimer.current) {
             clearTimeout(longPressTimer.current);
@@ -169,7 +166,6 @@ export function useBlockDrag(
     [activeDrag]
   );
 
-  // Cancel long press on early touch end (regular tap)
   const onBlockTouchEnd = useCallback(() => {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
@@ -177,19 +173,31 @@ export function useBlockDrag(
     }
   }, []);
 
+  // --- Mouse events ---
+  const onBlockMouseDown = useCallback(
+    (blockId: string, e: React.MouseEvent) => {
+      e.preventDefault();
+      pointerStartPos.current = { x: e.clientX, y: e.clientY };
+
+      longPressTimer.current = setTimeout(() => {
+        initiateDrag(blockId, e.clientY);
+      }, 500);
+    },
+    [initiateDrag]
+  );
+
   // --- Document-level listeners during active drag ---
   const isActive = activeDrag !== null;
 
   useEffect(() => {
     if (!isActive) return;
 
-    const handleTouchMove = (e: TouchEvent) => {
-      e.preventDefault(); // Prevent scroll (works because passive: false)
+    const handlePointerMove = (clientY: number, preventDefault?: () => void) => {
+      preventDefault?.();
       const drag = dragRef.current;
       if (!drag) return;
 
-      const touch = e.touches[0];
-      const pixelDelta = touch.clientY - drag.startY;
+      const pixelDelta = clientY - drag.startY;
       const rawMinutes = (pixelDelta / HOUR_HEIGHT) * 60;
       const snappedMinutes =
         Math.round(rawMinutes / SNAP_MINUTES) * SNAP_MINUTES;
@@ -200,11 +208,10 @@ export function useBlockDrag(
       );
     };
 
-    const handleTouchEnd = async () => {
+    const handleDragEnd = async () => {
       const drag = dragRef.current;
       const delta = latestDelta.current;
 
-      // No movement → cancel
       if (!drag || delta === 0) {
         dragRef.current = null;
         setActiveDrag(null);
@@ -214,7 +221,6 @@ export function useBlockDrag(
       const currentBlocks = blocksRef.current;
       const linkedIds = drag.linkedBlockIds;
 
-      // Compute new times
       const updatedBlocks = currentBlocks.map((b) => {
         if (!linkedIds.includes(b.id)) return b;
         return {
@@ -241,7 +247,7 @@ export function useBlockDrag(
         return;
       }
 
-      // Overlap check against other blocks on the same day (excluding sleep)
+      // Overlap check
       const dayOtherBlocks = updatedBlocks.filter(
         (b) =>
           b.day_of_week === drag.dayOfWeek &&
@@ -265,12 +271,12 @@ export function useBlockDrag(
         return;
       }
 
-      // ✅ Apply changes locally
+      // Apply changes
       setBlocksRef.current(updatedBlocks);
       dragRef.current = null;
       setActiveDrag(null);
 
-      // ✅ Persist to database
+      // Persist
       const uid = userIdRef.current;
       if (uid) {
         const dbUpdates = movedBlocks.map((b) =>
@@ -281,7 +287,6 @@ export function useBlockDrag(
         );
         await Promise.all(dbUpdates);
 
-        // Sync profile: wake_time / bedtime
         const movedTypes = movedBlocks.map((b) => b.block_type);
 
         if (movedTypes.includes("morning_routine")) {
@@ -310,15 +315,63 @@ export function useBlockDrag(
       }
     };
 
+    // Touch listeners
+    const handleTouchMove = (e: TouchEvent) => {
+      handlePointerMove(e.touches[0].clientY, () => e.preventDefault());
+    };
+    const handleTouchEnd = () => handleDragEnd();
+
+    // Mouse listeners
+    const handleMouseMove = (e: MouseEvent) => {
+      handlePointerMove(e.clientY, () => e.preventDefault());
+    };
+    const handleMouseUp = () => handleDragEnd();
+
     document.addEventListener("touchmove", handleTouchMove, { passive: false });
     document.addEventListener("touchend", handleTouchEnd);
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
 
     return () => {
       document.removeEventListener("touchmove", handleTouchMove);
       document.removeEventListener("touchend", handleTouchEnd);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
     };
-    // Only fires when drag starts / stops
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
+
+  // Cancel long press on mouse move before drag activates
+  useEffect(() => {
+    if (isActive) return; // Already dragging
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (pointerStartPos.current) {
+        const dx = Math.abs(e.clientX - pointerStartPos.current.x);
+        const dy = Math.abs(e.clientY - pointerStartPos.current.y);
+        if (dx > 8 || dy > 8) {
+          if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+          }
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+      }
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
   }, [isActive]);
 
   // --- Public helpers ---
@@ -342,6 +395,7 @@ export function useBlockDrag(
     onBlockTouchStart,
     onBlockTouchMove,
     onBlockTouchEnd,
+    onBlockMouseDown,
     getDragOffset,
     isDragging,
     isAnyDragging: isActive,

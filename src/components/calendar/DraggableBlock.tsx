@@ -11,6 +11,7 @@ interface DraggableBlockProps {
   onTouchStart: (e: React.TouchEvent) => void;
   onTouchMove: (e: React.TouchEvent) => void;
   onTouchEnd: () => void;
+  onMouseDown: (e: React.MouseEvent) => void;
   onClick: () => void;
 }
 
@@ -23,12 +24,13 @@ export function DraggableBlock({
   onTouchStart,
   onTouchMove,
   onTouchEnd,
+  onMouseDown,
   onClick,
 }: DraggableBlockProps) {
   return (
     <div
       className={cn(
-        "absolute left-0.5 right-0.5 rounded-sm border-l-2 px-0.5 py-0.5 overflow-hidden cursor-pointer",
+        "absolute left-0.5 right-0.5 rounded-sm border-l-2 px-0.5 py-0.5 overflow-hidden cursor-pointer select-none",
         colorClass,
         isDragging
           ? "z-50 shadow-2xl ring-2 ring-primary/50 scale-[1.03]"
@@ -37,11 +39,13 @@ export function DraggableBlock({
       style={{
         top: style.top + dragOffset,
         height: style.height,
+        minHeight: 8,
         transition: isDragging ? "none" : "top 0.2s ease-out",
       }}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
+      onMouseDown={onMouseDown}
       onClick={isDragging ? undefined : onClick}
     >
       <div className="flex items-start gap-0.5">
@@ -52,7 +56,6 @@ export function DraggableBlock({
           {block.title}
         </span>
       </div>
-      {/* Drag grip indicator (visible on hover / during drag) */}
       {isDragging && (
         <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-0.5">
           <GripVertical className="h-2.5 w-2.5 text-current opacity-50" />
