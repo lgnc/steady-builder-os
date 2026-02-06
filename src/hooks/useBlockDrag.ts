@@ -106,6 +106,7 @@ export function useBlockDrag(
   const latestDelta = useRef(0);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pointerStartPos = useRef<{ x: number; y: number } | null>(null);
+  const justDragged = useRef(false);
 
   // --- Initiate drag (shared logic for touch and mouse) ---
   const initiateDrag = useCallback((blockId: string, clientY: number) => {
@@ -242,9 +243,11 @@ export function useBlockDrag(
       });
 
       if (outOfBounds) {
-        dragRef.current = null;
-        setActiveDrag(null);
-        return;
+      dragRef.current = null;
+      setActiveDrag(null);
+      justDragged.current = true;
+      setTimeout(() => { justDragged.current = false; }, 50);
+      return;
       }
 
       // Overlap check
@@ -266,15 +269,19 @@ export function useBlockDrag(
       });
 
       if (hasOverlap) {
-        dragRef.current = null;
-        setActiveDrag(null);
-        return;
-      }
+      dragRef.current = null;
+      setActiveDrag(null);
+      justDragged.current = true;
+      setTimeout(() => { justDragged.current = false; }, 50);
+      return;
+    }
 
       // Apply changes
       setBlocksRef.current(updatedBlocks);
       dragRef.current = null;
       setActiveDrag(null);
+      justDragged.current = true;
+      setTimeout(() => { justDragged.current = false; }, 50);
 
       // Persist
       const uid = userIdRef.current;
@@ -391,6 +398,8 @@ export function useBlockDrag(
     [activeDrag]
   );
 
+  const wasJustDragged = useCallback(() => justDragged.current, []);
+
   return {
     onBlockTouchStart,
     onBlockTouchMove,
@@ -399,5 +408,6 @@ export function useBlockDrag(
     getDragOffset,
     isDragging,
     isAnyDragging: isActive,
+    wasJustDragged,
   };
 }
