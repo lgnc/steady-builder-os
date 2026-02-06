@@ -228,13 +228,35 @@ export default function OnboardingPage() {
   const generateSchedule = async () => {
     if (!user) return;
 
+    // Fetch training days for the selected program
+    const { data: trainingDaysData } = await supabase
+      .from("training_days")
+      .select("*")
+      .eq("program_key", data.selectedProgram)
+      .order("day_number");
+
+    // Determine which weekdays are available for training (exclude rest days)
+    const allDays = [0, 1, 2, 3, 4, 5, 6]; // Sunday to Saturday
+    const availableDays = allDays.filter(
+      (d) => !data.restDays.includes(getDayName(d).toLowerCase())
+    );
+
+    // Map training days to available weekdays
+    const trainingDayMap: Record<number, string> = {}; // day_of_week -> training_day_id
+    if (trainingDaysData) {
+      trainingDaysData.forEach((td, idx) => {
+        if (idx < availableDays.length) {
+          trainingDayMap[availableDays[idx]] = td.id;
+        }
+      });
+    }
+
     // Generate schedule blocks for each day
-    const days = [0, 1, 2, 3, 4, 5, 6]; // Sunday to Saturday
     const blocks: any[] = [];
 
-    days.forEach((day) => {
+    allDays.forEach((day) => {
       const isRestDay = data.restDays.includes(getDayName(day).toLowerCase());
-      
+
       // Wake time
       blocks.push({
         user_id: user.id,
@@ -270,17 +292,26 @@ export default function OnboardingPage() {
         });
       }
 
-      // Training (if not rest day)
-      if (!isRestDay) {
-        const trainingStart = getTrainingTime(data.preferredTrainingWindow, data.workStart, data.workEnd);
+      // Training (if not rest day and has an assigned training day)
+      if (!isRestDay && trainingDayMap[day]) {
+        const trainingStart = getTrainingTime(
+          data.preferredTrainingWindow,
+          data.workStart,
+          data.workEnd
+        );
+
+        // Find the training day to get the name
+        const td = trainingDaysData?.find((t) => t.id === trainingDayMap[day]);
+
         blocks.push({
           user_id: user.id,
           block_type: "training",
-          title: "Training",
+          title: td ? td.name : "Training",
           start_time: trainingStart,
           end_time: addMinutes(trainingStart, 60),
           day_of_week: day,
           is_locked: true,
+          training_day_id: trainingDayMap[day],
         });
       }
 
@@ -319,6 +350,23 @@ export default function OnboardingPage() {
     });
 
     await supabase.from("schedule_blocks").insert(blocks);
+
+    // Create user_training_schedule entries
+    if (trainingDaysData) {
+      const scheduleEntries = Object.entries(trainingDayMap).map(
+        ([dayOfWeek, trainingDayId]) => ({
+          user_id: user.id,
+          training_day_id: trainingDayId,
+          day_of_week: parseInt(dayOfWeek, 10),
+          week_number: 1,
+          completed: false,
+        })
+      );
+
+      if (scheduleEntries.length > 0) {
+        await supabase.from("user_training_schedule").insert(scheduleEntries);
+      }
+    }
   };
 
   if (authLoading) {

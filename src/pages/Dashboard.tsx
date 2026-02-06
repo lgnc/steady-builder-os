@@ -18,6 +18,7 @@ interface ScheduleBlock {
   end_time: string;
   day_of_week: number;
   is_locked: boolean;
+  training_day_id: string | null;
 }
 
 interface Streak {
@@ -206,7 +207,16 @@ export default function DashboardPage() {
             <Button
               variant="outline"
               className="h-auto py-4 flex-col gap-2"
-              onClick={() => navigate("/calendar")}
+              onClick={() => {
+                const trainingBlock = todayBlocks.find(
+                  (b) => b.block_type === "training" && b.training_day_id
+                );
+                if (trainingBlock?.training_day_id) {
+                  navigate(`/workout/${trainingBlock.training_day_id}`);
+                } else {
+                  navigate("/training");
+                }
+              }}
             >
               <Dumbbell className="h-5 w-5 text-primary" />
               <span className="text-sm">Today's Training</span>

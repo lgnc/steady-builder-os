@@ -18,6 +18,7 @@ interface ScheduleBlock {
   end_time: string;
   day_of_week: number;
   is_locked: boolean;
+  training_day_id: string | null;
 }
 
 // Time slots from 5 AM to 11 PM
@@ -232,7 +233,13 @@ export default function CalendarPage() {
                           top: style.top,
                           height: style.height,
                         }}
-                        onClick={() => setSelectedBlock(block)}
+                        onClick={() => {
+                          if (block.block_type === "training" && block.training_day_id) {
+                            navigate(`/workout/${block.training_day_id}`);
+                          } else {
+                            setSelectedBlock(block);
+                          }
+                        }}
                       >
                         <div className="flex items-start gap-0.5">
                           {block.is_locked && (
