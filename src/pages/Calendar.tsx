@@ -79,6 +79,7 @@ export default function CalendarPage() {
         return "bg-sky-500/20 border-sky-500/50 text-sky-300";
       case "wake":
         return "bg-amber-500/20 border-amber-500/50 text-amber-300";
+      // Note: "wake" blocks are no longer generated but kept for legacy data
       case "sleep":
         return "bg-indigo-500/10 border-indigo-500/30 text-indigo-300";
       case "commute":

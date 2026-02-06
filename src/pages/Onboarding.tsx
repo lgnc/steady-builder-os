@@ -266,57 +266,52 @@ export default function OnboardingPage() {
     // Generate schedule blocks for each day
     const blocks: any[] = [];
 
+    const morningRoutineMinutes = 45;
+    const gymCommute = data.gymCommuteMinutes || 0;
+    const trainingDuration = 60;
+
     allDays.forEach((day) => {
       const isRestDay = data.restDays.includes(getDayName(day).toLowerCase());
+      const hasTraining = !isRestDay && trainingDayMap[day];
+      const td = hasTraining
+        ? trainingDaysData?.find((t) => t.id === trainingDayMap[day])
+        : null;
 
-      // Wake time
-      blocks.push({
-        user_id: user.id,
-        block_type: "wake",
-        title: "Wake Up",
-        start_time: data.wakeTime,
-        end_time: addMinutes(data.wakeTime, 15),
-        day_of_week: day,
-        is_locked: true,
-      });
+      // Calculate morning routine end
+      const morningRoutineEnd = addMinutes(data.wakeTime, morningRoutineMinutes);
 
-      // Morning routine
+      // Calculate training block timing based on preferred window
+      let trainingStart: string | null = null;
+
+      if (hasTraining) {
+        if (data.preferredTrainingWindow === "morning") {
+          // Morning: routine → commute → training → commute, all sequential
+          trainingStart = gymCommute > 0
+            ? addMinutes(morningRoutineEnd, gymCommute)
+            : morningRoutineEnd;
+        } else if (data.preferredTrainingWindow === "afternoon") {
+          trainingStart = "12:00";
+        } else {
+          // Evening: after work + buffer
+          trainingStart = gymCommute > 0
+            ? addMinutes(data.workEnd, 15 + gymCommute)
+            : addMinutes(data.workEnd, 15);
+        }
+      }
+
+      // --- Morning Routine (starts at wake time) ---
       blocks.push({
         user_id: user.id,
         block_type: "morning_routine",
         title: "Morning Routine",
-        start_time: addMinutes(data.wakeTime, 15),
-        end_time: addMinutes(data.wakeTime, 60),
+        start_time: data.wakeTime,
+        end_time: morningRoutineEnd,
         day_of_week: day,
         is_locked: true,
       });
 
-      // Work blocks (weekdays only)
-      if (day >= 1 && day <= 5) {
-        blocks.push({
-          user_id: user.id,
-          block_type: "work",
-          title: "Work",
-          start_time: data.workStart,
-          end_time: data.workEnd,
-          day_of_week: day,
-          is_locked: false,
-        });
-      }
-
-      // Training (if not rest day and has an assigned training day)
-      if (!isRestDay && trainingDayMap[day]) {
-        const trainingStart = getTrainingTime(
-          data.preferredTrainingWindow,
-          data.workStart,
-          data.workEnd
-        );
-
-        // Find the training day to get the name
-        const td = trainingDaysData?.find((t) => t.id === trainingDayMap[day]);
-        const gymCommute = data.gymCommuteMinutes || 0;
-
-        // Commute to gym
+      // --- Training block (commute → training → commute) ---
+      if (hasTraining && trainingStart) {
         if (gymCommute > 0) {
           blocks.push({
             user_id: user.id,
@@ -329,33 +324,44 @@ export default function OnboardingPage() {
           });
         }
 
-        // Training session
         blocks.push({
           user_id: user.id,
           block_type: "training",
           title: td ? td.name : "Training",
           start_time: trainingStart,
-          end_time: addMinutes(trainingStart, 60),
+          end_time: addMinutes(trainingStart, trainingDuration),
           day_of_week: day,
           is_locked: true,
           training_day_id: trainingDayMap[day],
         });
 
-        // Commute home
         if (gymCommute > 0) {
           blocks.push({
             user_id: user.id,
             block_type: "commute",
             title: "Drive Home",
-            start_time: addMinutes(trainingStart, 60),
-            end_time: addMinutes(trainingStart, 60 + gymCommute),
+            start_time: addMinutes(trainingStart, trainingDuration),
+            end_time: addMinutes(trainingStart, trainingDuration + gymCommute),
             day_of_week: day,
             is_locked: true,
           });
         }
       }
 
-      // Reading time
+      // --- Work block (weekdays only, for standard work type) ---
+      if (day >= 1 && day <= 5 && data.workType === "standard") {
+        blocks.push({
+          user_id: user.id,
+          block_type: "work",
+          title: "Work",
+          start_time: data.workStart,
+          end_time: data.workEnd,
+          day_of_week: day,
+          is_locked: false,
+        });
+      }
+
+      // --- Reading time ---
       blocks.push({
         user_id: user.id,
         block_type: "reading",
@@ -366,7 +372,7 @@ export default function OnboardingPage() {
         is_locked: true,
       });
 
-      // Evening routine
+      // --- Evening Routine ---
       blocks.push({
         user_id: user.id,
         block_type: "evening_routine",
@@ -377,7 +383,7 @@ export default function OnboardingPage() {
         is_locked: true,
       });
 
-      // Sleep
+      // --- Sleep ---
       blocks.push({
         user_id: user.id,
         block_type: "sleep",
@@ -533,15 +539,5 @@ function addMinutes(time: string, minutes: number): string {
   return `${newHours.toString().padStart(2, "0")}:${newMins.toString().padStart(2, "0")}`;
 }
 
-function getTrainingTime(window: string, workStart: string, workEnd: string): string {
-  switch (window) {
-    case "morning":
-      return "06:30";
-    case "afternoon":
-      return "12:00";
-    case "evening":
-      return addMinutes(workEnd, 60);
-    default:
-      return "06:30";
-  }
-}
+// getTrainingTime is no longer needed — training time is now calculated
+// dynamically in generateSchedule based on morning routine end, commute, and work hours.
