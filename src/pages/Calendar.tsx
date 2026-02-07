@@ -103,6 +103,8 @@ export default function CalendarPage() {
         return "bg-orange-500/15 border-orange-500/40 text-orange-300";
       case "custom":
         return "bg-teal-500/20 border-teal-500/50 text-teal-300";
+      case "strategy":
+        return "bg-amber-500/20 border-amber-500/50 text-amber-300";
       default:
         return "bg-accent/50 border-accent text-accent-foreground";
     }
@@ -288,7 +290,8 @@ export default function CalendarPage() {
                               setTrainingSheetOpen(true);
                             } else if (
                               block.block_type === "morning_routine" ||
-                              block.block_type === "evening_routine"
+                              block.block_type === "evening_routine" ||
+                              block.block_type === "strategy"
                             ) {
                               setRoutineSheetType(block.block_type);
                               setRoutineSheetOpen(true);
@@ -385,6 +388,10 @@ export default function CalendarPage() {
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-sm bg-teal-500/40" />
               <span>Custom</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-sm bg-amber-500/40" />
+              <span>Strategy</span>
             </div>
             <span className="mx-2">•</span>
             <span>Long press to drag</span>

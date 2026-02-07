@@ -1,4 +1,4 @@
-import { Clock, Calendar, Target, Dumbbell, Moon, Car } from "lucide-react";
+import { Clock, Calendar, Target, Dumbbell, Moon, Car, CalendarClock } from "lucide-react";
 import { OnboardingData } from "@/pages/Onboarding";
 
 interface ReviewStepProps {
@@ -36,6 +36,12 @@ const goalLabels: Record<string, string> = {
   stress: "Stress Regulation",
   cognitive: "Cognitive Performance",
 };
+
+const strategyDayLabels = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function getDayLabel(day: number): string {
+  return strategyDayLabels[day] ?? "Sunday";
+}
 
 export function ReviewStep({ data }: ReviewStepProps) {
   return (
@@ -123,6 +129,26 @@ export function ReviewStep({ data }: ReviewStepProps) {
             </div>
           </div>
         )}
+
+        {/* Strategy Block */}
+        <div className="card-ritual">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 rounded-lg bg-amber-500/10">
+              <CalendarClock className="h-4 w-4 text-amber-400" />
+            </div>
+            <h3 className="font-medium">Strategy Block</h3>
+          </div>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Planning day</span>
+              <span className="font-medium">{getDayLabel(data.strategyDay)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Duration</span>
+              <span className="font-medium">45 min</span>
+            </div>
+          </div>
+        </div>
 
         {/* Program */}
         <div className="card-ritual">
