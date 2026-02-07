@@ -19,6 +19,7 @@ import { GoalsStep } from "@/components/onboarding/GoalsStep";
 import { FrictionStep } from "@/components/onboarding/FrictionStep";
 import { ReviewStep } from "@/components/onboarding/ReviewStep";
 import { NutritionStep } from "@/components/onboarding/NutritionStep";
+import { StrategyStep } from "@/components/onboarding/StrategyStep";
 
 export interface OnboardingData {
   // Sleep
@@ -62,9 +63,12 @@ export interface OnboardingData {
   weightKg?: number;
   targetWeightKg?: number;
   activityLevel: string;
+
+  // Strategy
+  strategyDay: number;
 }
 
-const TOTAL_STEPS = 10;
+const TOTAL_STEPS = 11;
 
 const defaultData: OnboardingData = {
   wakeTime: "06:00",
@@ -88,6 +92,7 @@ const defaultData: OnboardingData = {
   journalingOpenness: 5,
   nutritionConfidence: 5,
   activityLevel: "moderate",
+  strategyDay: 0,
 };
 
 export default function OnboardingPage() {
@@ -210,9 +215,10 @@ export default function OnboardingPage() {
           weight_kg: data.weightKg,
           target_weight_kg: data.targetWeightKg,
           activity_level: data.activityLevel,
+          strategy_day: data.strategyDay,
           onboarding_completed: true,
           onboarding_step: TOTAL_STEPS,
-        })
+        } as any)
         .eq("user_id", user.id);
 
       if (error) throw error;
@@ -398,6 +404,40 @@ export default function OnboardingPage() {
       });
     });
 
+    // --- Strategy Block (only on the chosen strategy day) ---
+    const strategyDay = data.strategyDay;
+    const strategyDayBlocks = blocks.filter((b: any) => b.day_of_week === strategyDay && b.block_type !== "sleep");
+    const morningRoutineOnStrategyDay = strategyDayBlocks.find((b: any) => b.block_type === "morning_routine");
+    const morningRoutineEndTime = morningRoutineOnStrategyDay ? morningRoutineOnStrategyDay.end_time : addMinutes(data.wakeTime, 45);
+
+    // Gap-finding algorithm
+    const otherBlocks = strategyDayBlocks
+      .filter((b: any) => b.block_type !== "morning_routine")
+      .sort((a: any, b: any) => a.start_time.localeCompare(b.start_time));
+
+    let strategyStart = morningRoutineEndTime;
+    const strategyDurationMinutes = 45;
+
+    for (const block of otherBlocks) {
+      const candidateEnd = addMinutes(strategyStart, strategyDurationMinutes);
+      if (candidateEnd <= block.start_time) {
+        break; // found a gap
+      }
+      if (block.end_time > strategyStart) {
+        strategyStart = block.end_time;
+      }
+    }
+
+    blocks.push({
+      user_id: user.id,
+      block_type: "strategy",
+      title: "Strategy Block",
+      start_time: strategyStart,
+      end_time: addMinutes(strategyStart, strategyDurationMinutes),
+      day_of_week: strategyDay,
+      is_locked: false,
+    });
+
     await supabase.from("schedule_blocks").insert(blocks);
 
     // Create user_training_schedule entries
@@ -421,14 +461,21 @@ export default function OnboardingPage() {
   const seedDefaultChecklistItems = async () => {
     if (!user) return;
 
-    const items = DEFAULT_MORNING_ITEMS.map((title, idx) => ({
+    const morningItems = DEFAULT_MORNING_ITEMS.map((title, idx) => ({
       user_id: user.id,
       routine_type: "morning_routine",
       title,
       sort_order: idx,
     }));
 
-    await supabase.from("routine_checklist_items").insert(items);
+    const strategyItems = DEFAULT_STRATEGY_ITEMS.map((title, idx) => ({
+      user_id: user.id,
+      routine_type: "strategy",
+      title,
+      sort_order: idx,
+    }));
+
+    await supabase.from("routine_checklist_items").insert([...morningItems, ...strategyItems]);
   };
 
   if (authLoading) {
@@ -443,6 +490,7 @@ export default function OnboardingPage() {
     "Sleep & Recovery",
     "Work Type",
     "Work & Time",
+    "Strategy Block",
     "Gym Commute",
     "Training Experience",
     "Select Program",
@@ -488,13 +536,14 @@ export default function OnboardingPage() {
               )}
               {step === 2 && <WorkTypeStep data={data} updateData={updateData} />}
               {step === 3 && <WorkStep data={data} updateData={updateData} />}
-              {step === 4 && <GymCommuteStep data={data} updateData={updateData} />}
-              {step === 5 && <TrainingStep data={data} updateData={updateData} />}
-              {step === 6 && <ProgramStep data={data} updateData={updateData} />}
-              {step === 7 && <GoalsStep data={data} updateData={updateData} />}
-              {step === 8 && <FrictionStep data={data} updateData={updateData} />}
-              {step === 9 && <NutritionStep data={data} updateData={updateData} />}
-              {step === 10 && <ReviewStep data={data} />}
+              {step === 4 && <StrategyStep data={data} updateData={updateData} />}
+              {step === 5 && <GymCommuteStep data={data} updateData={updateData} />}
+              {step === 6 && <TrainingStep data={data} updateData={updateData} />}
+              {step === 7 && <ProgramStep data={data} updateData={updateData} />}
+              {step === 8 && <GoalsStep data={data} updateData={updateData} />}
+              {step === 9 && <FrictionStep data={data} updateData={updateData} />}
+              {step === 10 && <NutritionStep data={data} updateData={updateData} />}
+              {step === 11 && <ReviewStep data={data} />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -563,4 +612,14 @@ const DEFAULT_MORNING_ITEMS = [
   "10-min stretch or mobility",
   "Morning journal entry",
   "Review today's schedule",
+];
+
+// Default strategy block checklist items
+const DEFAULT_STRATEGY_ITEMS = [
+  "Review upcoming week's commitments",
+  "Schedule all training sessions",
+  "Plan meals and grocery shop",
+  "Block social events and meetings",
+  "Identify high-energy vs low-energy days",
+  "Set top 3 priorities for the week",
 ];

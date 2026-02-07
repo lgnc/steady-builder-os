@@ -32,6 +32,15 @@ const DEFAULT_EVENING_ITEMS = [
   "Lights out",
 ];
 
+const DEFAULT_STRATEGY_ITEMS = [
+  "Review upcoming week's commitments",
+  "Schedule all training sessions",
+  "Plan meals and grocery shop",
+  "Block social events and meetings",
+  "Identify high-energy vs low-energy days",
+  "Set top 3 priorities for the week",
+];
+
 interface ChecklistItem {
   id: string;
   title: string;
@@ -66,7 +75,11 @@ export function RoutineChecklistSheet({
   const allComplete = totalCount > 0 && completedCount === totalCount;
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
-  const routineLabel = routineType === "morning_routine" ? "Morning Routine" : "Evening Routine";
+  const routineLabel = routineType === "morning_routine" 
+    ? "Morning Routine" 
+    : routineType === "strategy" 
+    ? "Strategy Block" 
+    : "Evening Routine";
 
   // Detect if an item title is a journal entry link
   const isJournalItem = (title: string) => {
@@ -92,7 +105,11 @@ export function RoutineChecklistSheet({
 
   // Seed default items for existing users who have none
   const seedDefaults = useCallback(async () => {
-    const defaults = routineType === "morning_routine" ? DEFAULT_MORNING_ITEMS : DEFAULT_EVENING_ITEMS;
+    const defaults = routineType === "morning_routine" 
+      ? DEFAULT_MORNING_ITEMS 
+      : routineType === "strategy"
+      ? DEFAULT_STRATEGY_ITEMS
+      : DEFAULT_EVENING_ITEMS;
     const rows = defaults.map((title, i) => ({
       user_id: userId,
       routine_type: routineType,

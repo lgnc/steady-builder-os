@@ -71,6 +71,7 @@ export type Database = {
           secondary_goals: string[] | null
           selected_program: string | null
           sleep_duration: number
+          strategy_day: number | null
           stress_level: number | null
           target_weight_kg: number | null
           updated_at: string
@@ -107,6 +108,7 @@ export type Database = {
           secondary_goals?: string[] | null
           selected_program?: string | null
           sleep_duration?: number
+          strategy_day?: number | null
           stress_level?: number | null
           target_weight_kg?: number | null
           updated_at?: string
@@ -143,6 +145,7 @@ export type Database = {
           secondary_goals?: string[] | null
           selected_program?: string | null
           sleep_duration?: number
+          strategy_day?: number | null
           stress_level?: number | null
           target_weight_kg?: number | null
           updated_at?: string
