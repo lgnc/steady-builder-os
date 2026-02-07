@@ -9,6 +9,7 @@ import { MobileLayout } from "@/components/layout/MobileLayout";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { CoachChat } from "@/components/dashboard/CoachChat";
 
 interface ScheduleBlock {
   id: string;
@@ -293,6 +294,8 @@ export default function DashboardPage() {
           <p className="text-xs text-muted-foreground mt-2">— Jocko Willink</p>
         </motion.section>
       </div>
+
+      <CoachChat />
     </MobileLayout>
   );
 }
