@@ -1,104 +1,115 @@
 
 
-# Calendar Enhancements: Workout Rescheduling and Custom Events
+# Strategy Block: Weekly Planning Session
 
 ## Overview
 
-Two features for the calendar:
-
-1. **Workout Rescheduling** -- A deliberate "Reschedule" action when tapping a training block, allowing users to move workouts to a different day via a day picker with a confirmation step. Adds friction to prevent casual changes.
-
-2. **Custom Calendar Events** -- A `+` button on the calendar that opens a creation sheet where users can add personal events (social, meetings, extracurriculars) with a title, day, and time range. These appear as a new block type on the calendar for time-blocking visibility.
+Add a 45-minute "Strategy Block" to the app -- a weekly planning ritual where users put their phone on Do Not Disturb and map out the entire week ahead. This touches three areas: a new onboarding question, smart schedule placement, and an interactive checklist when tapped.
 
 ---
 
-## Feature 1: Workout Rescheduling
+## 1. New Onboarding Step: "Which day for your Strategy Block?"
 
-### Current Behavior
-Tapping a training block immediately navigates to `/workout/:trainingDayId`. There is no way to move a workout to a different day.
+A new step is inserted as **step 4** (between "Work & Time" and "Gym Commute"), pushing all subsequent steps forward by one (total becomes 11 steps).
 
-### New Behavior
-Tapping a training block now opens a **detail sheet** (bottom sheet) instead of immediately navigating. This sheet shows:
-- The workout name and time
-- A prominent **"Start Workout"** button (navigates to the workout page, same as before)
-- A **"Reschedule"** button below it (secondary action)
+The step explains what a Strategy Block is and presents 7 day-of-week buttons (Sun-Sat), defaulting to Sunday. Single selection, same pill-button style as the rest day picker in WorkStep.
 
-When "Reschedule" is tapped:
-- The sheet transitions to show a **day-of-week picker** (7 day buttons: Mon-Sun)
-- Days that already have a training session are shown but marked (so the user can see conflicts)
-- A **"Confirm Reschedule"** button finalizes the move
-- The training block (plus its linked commute blocks) moves to the new day
-- Both `schedule_blocks.day_of_week` and `user_training_schedule.day_of_week` are updated in the database
+**Copy on the step:**
+> **Strategy Block**
+> Pick one day each week for a 45-minute planning session. You'll map out training, meals, meetings, energy management -- the entire week ahead. Phone on Do Not Disturb, full focus.
 
-This creates intentional friction: tap the block, see the sheet, choose "Reschedule", pick a day, confirm. Four deliberate steps.
-
-### Files
-| File | Action |
-|------|--------|
-| `src/components/calendar/TrainingBlockSheet.tsx` | Create -- bottom sheet with workout details, Start Workout button, and Reschedule flow |
-| `src/pages/Calendar.tsx` | Modify -- replace direct navigation on training block tap with opening the new sheet |
+The chosen day is saved as `strategy_day` (integer, 0=Sunday through 6=Saturday) in the `onboarding_data` table.
 
 ---
 
-## Feature 2: Custom Calendar Events
+## 2. Smart Time Placement (No Overlaps)
 
-### Behavior
-- A **`+` floating action button** appears at the bottom-right of the calendar view (above the bottom nav)
-- Tapping it opens a **creation sheet** (bottom sheet) with:
-  - **Title** text input (required)
-  - **Day of week** picker (7 day buttons, defaults to today's day)
-  - **Start time** and **End time** selectors (scrollable time pickers in 15-minute increments)
-- On save, a new `schedule_block` is inserted with `block_type = "custom"`, `is_locked = false`
-- The block appears on the calendar immediately with a distinct color
-- Custom blocks can be **dragged** (time adjustment, same as other blocks) and **deleted**
-- Tapping a custom block opens the existing block detail modal, which will now include a **"Delete"** button for custom blocks only
+The strategy block is placed on the chosen day during schedule generation. The placement logic:
 
-### Color
-Custom blocks get a new color entry: a teal/cyan shade to differentiate from system blocks:
-`bg-teal-500/20 border-teal-500/50 text-teal-300`
+1. Start with the time right after the morning routine ends on that day
+2. Collect all existing blocks on that day (training, commute, work, etc.) and sort them by start time
+3. Walk through each gap -- if the gap between two blocks (or between morning routine end and the first block) is at least 45 minutes, place it there
+4. If no gap exists before work/training, place it after the last block that ends before evening routine
 
-### Files
-| File | Action |
-|------|--------|
-| `src/components/calendar/AddEventSheet.tsx` | Create -- bottom sheet with title, day picker, and time selectors |
-| `src/pages/Calendar.tsx` | Modify -- add FAB button, add custom block color, add delete action to block detail modal, wire up the add event sheet |
+This ensures it never overlaps with training sessions, commute blocks, or work blocks. It finds the earliest available 45-minute window.
+
+**The block is draggable** (`is_locked: false` for time, but block_type `strategy` is treated as non-deletable). Users can long-press drag it to a different time if the default slot doesn't suit them, just like any other movable block. It should not be deletable by the user (it's a system block, not a custom event).
+
+---
+
+## 3. Strategy Checklist (Tapping the Block)
+
+When tapped on the calendar, the strategy block opens the same `RoutineChecklistSheet` component used by morning and evening routines, but with `routineType = "strategy"`. The sheet already supports any routine type -- it just needs default items and a label for the strategy variant.
+
+**Default checklist items:**
+1. Review upcoming week's commitments
+2. Schedule all training sessions
+3. Plan meals and grocery shop
+4. Block social events and meetings
+5. Identify high-energy vs low-energy days
+6. Set top 3 priorities for the week
+
+These items are seeded during onboarding (same as morning routine items are seeded today). Users can add, remove, and reorder items using the edit mode that already exists in the checklist sheet.
+
+Completing all items increments a `strategy` streak, tracked the same way as morning/evening routine streaks.
+
+---
+
+## 4. Review Step Update
+
+The Review Step (final onboarding screen) gets a new "Strategy Block" card showing the chosen day (e.g., "Sunday"), using an amber/gold icon to match the calendar color.
 
 ---
 
 ## Technical Details
 
-### Database
-No schema changes needed. The existing `schedule_blocks` table already supports everything:
-- `block_type` is a text field (will use `"custom"` for user-created events)
-- `is_locked` defaults to `false`
-- `training_day_id` will be `null` for custom events
-- All existing RLS policies already cover CRUD operations for the user's own blocks
+### Database Migration
 
-### Training Block Sheet (`TrainingBlockSheet.tsx`)
-- Uses the existing `Sheet` component (bottom sheet pattern, same as `RoutineChecklistSheet`)
-- Two views: "details" (default) and "reschedule" (day picker)
-- The day picker shows 7 buttons (Sun-Sat) with the current day highlighted
-- On confirm: updates all linked blocks (training + commute) to the new `day_of_week` via Supabase, and also updates the corresponding `user_training_schedule` row
-- Overlap validation: checks if the new day has time conflicts before allowing the move
+Two changes:
 
-### Add Event Sheet (`AddEventSheet.tsx`)
-- Uses the `Sheet` component for consistency
-- Time selection uses simple hour/minute dropdowns or a scrollable list in 15-minute increments (5:00 AM to 11:00 PM range)
-- Validates that end time is after start time and that there are no overlaps with existing blocks on the chosen day
-- On save: inserts into `schedule_blocks` and updates local state
+1. **Add `strategy_day` column** to `onboarding_data`:
+   - Type: `integer`, default `0` (Sunday), nullable
+   
+2. **Update `handle_new_user()` function** to add a `strategy` streak row for new users (alongside existing journaling, training, routine streaks)
 
-### Calendar Page Changes
-- Training block click: opens `TrainingBlockSheet` instead of navigating
-- Block detail modal (for non-training, non-routine blocks): adds a "Delete" button for `block_type === "custom"` blocks, which removes the block from the database and local state
-- New FAB (`+` button) at bottom-right, fixed position above the bottom nav
-- Legend updated to include "Custom" block color indicator
-- Color map updated with `"custom"` entry
+### New File
 
-### Summary of All File Changes
+| File | Description |
+|------|-------------|
+| `src/components/onboarding/StrategyStep.tsx` | Day picker component for choosing strategy block day. 7 pill buttons (Sun-Sat), explanation text, amber/gold icon theme. |
 
-| File | Action |
-|------|--------|
-| `src/components/calendar/TrainingBlockSheet.tsx` | Create |
-| `src/components/calendar/AddEventSheet.tsx` | Create |
-| `src/pages/Calendar.tsx` | Modify |
+### Modified Files
+
+| File | Changes |
+|------|---------|
+| `src/pages/Onboarding.tsx` | Add `strategyDay` to `OnboardingData` interface and defaults. Increment `TOTAL_STEPS` to 11. Insert StrategyStep at position 4 (shifting steps 4-10 to 5-11). Update `stepTitles`. Save `strategy_day` in `completeOnboarding()`. Add strategy block placement logic in `generateSchedule()` with gap-finding algorithm. Seed strategy checklist items in `seedDefaultChecklistItems()`. |
+| `src/components/onboarding/ReviewStep.tsx` | Add a "Strategy Block" card showing the selected day name with amber icon. |
+| `src/pages/Calendar.tsx` | Add `"strategy"` color entry (amber/gold: `bg-amber-500/20 border-amber-500/50 text-amber-300`). Handle strategy block tap to open `RoutineChecklistSheet` with `routineType = "strategy"`. Add strategy to legend. |
+| `src/components/calendar/RoutineChecklistSheet.tsx` | Add `DEFAULT_STRATEGY_ITEMS` array with the 6 checklist items. Extend `seedDefaults` to handle `routine_type = "strategy"`. Update `routineLabel` to show "Strategy Block" when `routineType === "strategy"`. |
+
+### Schedule Generation: Gap-Finding Algorithm
+
+```text
+function findStrategySlot(dayBlocks, morningRoutineEnd):
+    sort dayBlocks by start_time
+    
+    candidateStart = morningRoutineEnd
+    strategyDuration = 45 minutes
+    
+    for each block in dayBlocks:
+        if block.start_time >= candidateStart + 45min:
+            return candidateStart  // found a gap
+        candidateStart = max(candidateStart, block.end_time)
+    
+    // After all blocks, place it in remaining time
+    return candidateStart
+```
+
+This ensures the strategy block slots into the first available 45-minute window after the morning routine, skipping over any training, commute, or work blocks that might be in the way.
+
+### Color and Visual Treatment
+
+- Calendar color: `bg-amber-500/20 border-amber-500/50 text-amber-300` (warm amber/gold to signify "planning" activity)
+- Block label: "Strategy Block"
+- Legend entry: amber dot + "Strategy"
 
