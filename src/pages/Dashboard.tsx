@@ -202,7 +202,13 @@ export default function DashboardPage() {
               onClick={() => navigate("/journal")}
             >
               <PenLine className="h-5 w-5 text-primary" />
-              <span className="text-sm">Morning Journal</span>
+              <span className="text-sm">
+                {new Date().getHours() < 12
+                  ? "Morning Journal"
+                  : new Date().getHours() >= 17
+                    ? "Evening Reflection"
+                    : "Morning Journal"}
+              </span>
             </Button>
             <Button
               variant="outline"

@@ -1,12 +1,12 @@
 import { Link, useLocation } from "react-router-dom";
-import { Calendar, Home, BookOpen, User, Dumbbell } from "lucide-react";
+import { Calendar, Home, Utensils, User, Dumbbell } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { path: "/dashboard", icon: Home, label: "Today" },
   { path: "/training", icon: Dumbbell, label: "Training" },
   { path: "/calendar", icon: Calendar, label: "Calendar" },
-  { path: "/journal", icon: BookOpen, label: "Journal" },
+  { path: "/nutrition", icon: Utensils, label: "Nutrition" },
   { path: "/profile", icon: User, label: "Profile" },
 ];
 
