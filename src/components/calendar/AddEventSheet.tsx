@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Repeat } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Sheet,
@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { ScheduleBlock } from "@/hooks/useBlockDrag";
 
@@ -50,7 +51,7 @@ interface AddEventSheetProps {
   onOpenChange: (open: boolean) => void;
   blocks: ScheduleBlock[];
   userId: string;
-  onEventAdded: (newBlock: ScheduleBlock) => void;
+  onEventAdded: (newBlocks: ScheduleBlock | ScheduleBlock[]) => void;
 }
 
 export function AddEventSheet({
@@ -64,6 +65,8 @@ export function AddEventSheet({
   const [dayOfWeek, setDayOfWeek] = useState(new Date().getDay());
   const [startTime, setStartTime] = useState("12:00");
   const [endTime, setEndTime] = useState("13:00");
+  const [recurring, setRecurring] = useState(false);
+  const [recurringDays, setRecurringDays] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,6 +75,8 @@ export function AddEventSheet({
     setDayOfWeek(new Date().getDay());
     setStartTime("12:00");
     setEndTime("13:00");
+    setRecurring(false);
+    setRecurringDays([]);
     setError(null);
   };
 
@@ -80,10 +85,24 @@ export function AddEventSheet({
     onOpenChange(open);
   };
 
+  const toggleRecurringDay = (day: number) => {
+    setRecurringDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+    );
+    setError(null);
+  };
+
+  const targetDays = recurring ? recurringDays : [dayOfWeek];
+
   const handleSave = async () => {
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
       setError("Give your event a name.");
+      return;
+    }
+
+    if (recurring && recurringDays.length === 0) {
+      setError("Select at least one day for recurring events.");
       return;
     }
 
@@ -95,47 +114,57 @@ export function AddEventSheet({
       return;
     }
 
-    // Overlap check
-    const dayBlocks = blocks.filter(
-      (b) => b.day_of_week === dayOfWeek && b.block_type !== "sleep"
-    );
-
-    const hasOverlap = dayBlocks.some((b) => {
-      const oStart = parseTimeToMinutes(b.start_time);
-      const oEnd = parseTimeToMinutes(b.end_time);
-      return startMin < oEnd && endMin > oStart;
-    });
-
-    if (hasOverlap) {
-      setError("Overlaps with an existing block. Adjust the time.");
-      return;
+    // Overlap check for all target days
+    for (const day of targetDays) {
+      const dayBlocks = blocks.filter(
+        (b) => b.day_of_week === day && b.block_type !== "sleep"
+      );
+      const hasOverlap = dayBlocks.some((b) => {
+        const oStart = parseTimeToMinutes(b.start_time);
+        const oEnd = parseTimeToMinutes(b.end_time);
+        return startMin < oEnd && endMin > oStart;
+      });
+      if (hasOverlap) {
+        setError(
+          recurring
+            ? `Overlaps with an existing block on ${DAY_LABELS[day]}. Remove that day or adjust the time.`
+            : "Overlaps with an existing block. Adjust the time."
+        );
+        return;
+      }
     }
 
     setSaving(true);
     setError(null);
 
+    const rows = targetDays.map((day) => ({
+      user_id: userId,
+      block_type: "custom",
+      title: trimmedTitle,
+      start_time: startTime,
+      end_time: endTime,
+      day_of_week: day,
+      is_locked: false,
+    }));
+
     const { data, error: dbError } = await supabase
       .from("schedule_blocks")
-      .insert({
-        user_id: userId,
-        block_type: "custom",
-        title: trimmedTitle,
-        start_time: startTime,
-        end_time: endTime,
-        day_of_week: dayOfWeek,
-        is_locked: false,
-      })
-      .select()
-      .single();
+      .insert(rows)
+      .select();
 
     setSaving(false);
 
-    if (dbError || !data) {
+    if (dbError || !data || data.length === 0) {
       setError("Failed to save. Try again.");
       return;
     }
 
-    onEventAdded(data as unknown as ScheduleBlock);
+    const newBlocks = data as unknown as ScheduleBlock[];
+    if (newBlocks.length === 1) {
+      onEventAdded(newBlocks[0]);
+    } else {
+      onEventAdded(newBlocks);
+    }
     handleOpenChange(false);
   };
 
@@ -167,34 +196,74 @@ export function AddEventSheet({
                 setTitle(e.target.value);
                 setError(null);
               }}
-              placeholder="e.g. Dinner with friends"
+              placeholder="e.g. Trivia night"
               className="h-11 bg-input border-border"
               autoFocus
             />
           </div>
 
+          {/* Recurring toggle */}
+          <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Repeat className="h-4 w-4 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Recurring</p>
+                <p className="text-xs text-muted-foreground">
+                  Repeats every week on selected days
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={recurring}
+              onCheckedChange={(checked) => {
+                setRecurring(checked);
+                if (checked && recurringDays.length === 0) {
+                  setRecurringDays([dayOfWeek]);
+                }
+                setError(null);
+              }}
+            />
+          </div>
+
           {/* Day picker */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Day</Label>
+            <Label className="text-sm font-medium">
+              {recurring ? "Repeat on" : "Day"}
+            </Label>
             <div className="grid grid-cols-7 gap-2">
-              {DAY_LABELS.map((label, dayIndex) => (
-                <button
-                  key={dayIndex}
-                  onClick={() => {
-                    setDayOfWeek(dayIndex);
-                    setError(null);
-                  }}
-                  className={cn(
-                    "py-2.5 rounded-xl text-sm font-medium transition-all border",
-                    dayIndex === dayOfWeek
-                      ? "bg-primary border-primary text-primary-foreground"
-                      : "bg-card border-border hover:border-primary/50"
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
+              {DAY_LABELS.map((label, dayIndex) => {
+                const isSelected = recurring
+                  ? recurringDays.includes(dayIndex)
+                  : dayIndex === dayOfWeek;
+
+                return (
+                  <button
+                    key={dayIndex}
+                    onClick={() => {
+                      if (recurring) {
+                        toggleRecurringDay(dayIndex);
+                      } else {
+                        setDayOfWeek(dayIndex);
+                        setError(null);
+                      }
+                    }}
+                    className={cn(
+                      "py-2.5 rounded-xl text-sm font-medium transition-all border",
+                      isSelected
+                        ? "bg-primary border-primary text-primary-foreground"
+                        : "bg-card border-border hover:border-primary/50"
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
+            {recurring && recurringDays.length > 0 && (
+              <p className="text-xs text-muted-foreground px-1">
+                Every {recurringDays.sort((a, b) => a - b).map((d) => DAY_LABELS[d]).join(", ")}
+              </p>
+            )}
           </div>
 
           {/* Time selectors */}
@@ -256,6 +325,8 @@ export function AddEventSheet({
           >
             {saving ? (
               <span className="animate-pulse">Saving...</span>
+            ) : recurring && recurringDays.length > 1 ? (
+              `Add to ${recurringDays.length} Days`
             ) : (
               "Add to Calendar"
             )}

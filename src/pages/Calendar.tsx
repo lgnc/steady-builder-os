@@ -433,8 +433,9 @@ export default function CalendarPage() {
           onOpenChange={setAddEventSheetOpen}
           blocks={blocks}
           userId={user.id}
-          onEventAdded={(newBlock) => {
-            setBlocks((prev) => [...prev, newBlock]);
+          onEventAdded={(newBlocks) => {
+            const arr = Array.isArray(newBlocks) ? newBlocks : [newBlocks];
+            setBlocks((prev) => [...prev, ...arr]);
           }}
         />
       )}
