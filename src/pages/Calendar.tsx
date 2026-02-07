@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, startOfWeek, addDays, isSameDay } from "date-fns";
-import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, Plus, Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -12,6 +12,8 @@ import { useBlockDrag, type ScheduleBlock } from "@/hooks/useBlockDrag";
 import { useBlockResize } from "@/hooks/useBlockResize";
 import { DraggableBlock } from "@/components/calendar/DraggableBlock";
 import { RoutineChecklistSheet } from "@/components/calendar/RoutineChecklistSheet";
+import { TrainingBlockSheet } from "@/components/calendar/TrainingBlockSheet";
+import { AddEventSheet } from "@/components/calendar/AddEventSheet";
 
 // Time slots from 5 AM to 11 PM
 const HOURS = Array.from({ length: 19 }, (_, i) => i + 5);
@@ -23,6 +25,13 @@ export default function CalendarPage() {
   const [selectedBlock, setSelectedBlock] = useState<ScheduleBlock | null>(null);
   const [routineSheetOpen, setRoutineSheetOpen] = useState(false);
   const [routineSheetType, setRoutineSheetType] = useState<string>("morning_routine");
+
+  // Training block sheet state
+  const [trainingSheetOpen, setTrainingSheetOpen] = useState(false);
+  const [trainingBlock, setTrainingBlock] = useState<ScheduleBlock | null>(null);
+
+  // Add event sheet state
+  const [addEventSheetOpen, setAddEventSheetOpen] = useState(false);
 
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -92,6 +101,8 @@ export default function CalendarPage() {
         return "bg-indigo-500/10 border-indigo-500/30 text-indigo-300";
       case "commute":
         return "bg-orange-500/15 border-orange-500/40 text-orange-300";
+      case "custom":
+        return "bg-teal-500/20 border-teal-500/50 text-teal-300";
       default:
         return "bg-accent/50 border-accent text-accent-foreground";
     }
@@ -123,6 +134,12 @@ export default function CalendarPage() {
     const [hours] = time.split(":");
     const hour = parseInt(hours);
     return hour > 12 ? `${hour - 12}p` : `${hour}a`;
+  };
+
+  const handleDeleteCustomBlock = async (blockId: string) => {
+    setBlocks((prev) => prev.filter((b) => b.id !== blockId));
+    setSelectedBlock(null);
+    await supabase.from("schedule_blocks").delete().eq("id", blockId);
   };
 
   if (authLoading) {
@@ -267,7 +284,8 @@ export default function CalendarPage() {
                               block.block_type === "training" &&
                               block.training_day_id
                             ) {
-                              navigate(`/workout/${block.training_day_id}`);
+                              setTrainingBlock(block);
+                              setTrainingSheetOpen(true);
                             } else if (
                               block.block_type === "morning_routine" ||
                               block.block_type === "evening_routine"
@@ -311,21 +329,36 @@ export default function CalendarPage() {
                 ✕
               </Button>
             </div>
-            <div className="flex items-center gap-2">
-              <span
-                className={cn(
-                  "text-xs px-2 py-0.5 rounded capitalize",
-                  selectedBlock.block_type === "training"
-                    ? "bg-primary/20 text-primary"
-                    : "bg-muted text-muted-foreground"
-                )}
-              >
-                {selectedBlock.block_type.replace("_", " ")}
-              </span>
-              {selectedBlock.is_locked && (
-                <span className="text-xs text-muted-foreground">
-                  Non-negotiable
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    "text-xs px-2 py-0.5 rounded capitalize",
+                    selectedBlock.block_type === "training"
+                      ? "bg-primary/20 text-primary"
+                      : selectedBlock.block_type === "custom"
+                      ? "bg-teal-500/20 text-teal-300"
+                      : "bg-muted text-muted-foreground"
+                  )}
+                >
+                  {selectedBlock.block_type.replace("_", " ")}
                 </span>
+                {selectedBlock.is_locked && (
+                  <span className="text-xs text-muted-foreground">
+                    Non-negotiable
+                  </span>
+                )}
+              </div>
+              {selectedBlock.block_type === "custom" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDeleteCustomBlock(selectedBlock.id)}
+                  className="text-destructive hover:text-destructive h-8 px-2"
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete
+                </Button>
               )}
             </div>
           </div>
@@ -349,11 +382,24 @@ export default function CalendarPage() {
               <div className="w-2 h-2 rounded-sm bg-violet-500/40" />
               <span>Evening</span>
             </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-sm bg-teal-500/40" />
+              <span>Custom</span>
+            </div>
             <span className="mx-2">•</span>
             <span>Long press to drag</span>
           </div>
         </div>
       </div>
+
+      {/* FAB - Add Event */}
+      <button
+        onClick={() => setAddEventSheetOpen(true)}
+        className="fixed bottom-24 right-4 z-30 w-12 h-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all"
+        aria-label="Add event"
+      >
+        <Plus className="h-6 w-6" />
+      </button>
 
       {/* Routine Checklist Sheet */}
       {user && (
@@ -362,6 +408,34 @@ export default function CalendarPage() {
           onOpenChange={setRoutineSheetOpen}
           userId={user.id}
           routineType={routineSheetType}
+        />
+      )}
+
+      {/* Training Block Sheet */}
+      {user && (
+        <TrainingBlockSheet
+          open={trainingSheetOpen}
+          onOpenChange={setTrainingSheetOpen}
+          block={trainingBlock}
+          blocks={blocks}
+          userId={user.id}
+          onRescheduleComplete={(updatedBlocks) => {
+            setBlocks(updatedBlocks);
+            setTrainingBlock(null);
+          }}
+        />
+      )}
+
+      {/* Add Event Sheet */}
+      {user && (
+        <AddEventSheet
+          open={addEventSheetOpen}
+          onOpenChange={setAddEventSheetOpen}
+          blocks={blocks}
+          userId={user.id}
+          onEventAdded={(newBlock) => {
+            setBlocks((prev) => [...prev, newBlock]);
+          }}
         />
       )}
     </MobileLayout>
