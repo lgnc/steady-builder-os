@@ -34,6 +34,7 @@ export function DailyHabits({ userId }: DailyHabitsProps) {
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [editOpen, setEditOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [seeded, setSeeded] = useState(false);
 
   const today = format(new Date(), "yyyy-MM-dd");
   const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
@@ -58,14 +59,15 @@ export function DailyHabits({ userId }: DailyHabitsProps) {
 
     let fetchedHabits = (habitsRes.data ?? []) as Habit[];
 
-    // Seed defaults if no habits exist
-    if (fetchedHabits.length === 0) {
+    // Seed defaults if no habits exist (guard against race condition)
+    if (fetchedHabits.length === 0 && !seeded) {
+      setSeeded(true);
       const rows = DEFAULT_HABITS.map((h) => ({ ...h, user_id: userId }));
-      const { data: seeded } = await supabase
+      const { data: seededData } = await supabase
         .from("habits")
         .insert(rows)
         .select("id, title, habit_type, sort_order, current_streak, longest_streak, last_completed_date");
-      fetchedHabits = (seeded ?? []) as Habit[];
+      fetchedHabits = (seededData ?? []) as Habit[];
     }
 
     // Streak decay: reset streaks for habits not completed yesterday or today
