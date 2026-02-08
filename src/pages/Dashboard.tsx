@@ -10,6 +10,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CoachChat } from "@/components/dashboard/CoachChat";
+import { DailyHabits } from "@/components/dashboard/DailyHabits";
 
 interface ScheduleBlock {
   id: string;
@@ -230,6 +231,9 @@ export default function DashboardPage() {
             </Button>
           </div>
         </motion.section>
+
+        {/* Daily Habits */}
+        {user && <DailyHabits userId={user.id} />}
 
         {/* Today's Schedule */}
         <motion.section
