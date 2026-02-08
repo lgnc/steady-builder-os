@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CoachChat } from "@/components/dashboard/CoachChat";
 import { DailyHabits } from "@/components/dashboard/DailyHabits";
+import { RoutineChecklistSheet } from "@/components/calendar/RoutineChecklistSheet";
+import { TrainingBlockSheet } from "@/components/calendar/TrainingBlockSheet";
 
 interface ScheduleBlock {
   id: string;
@@ -33,6 +35,10 @@ export default function DashboardPage() {
   const [streaks, setStreaks] = useState<Streak[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
+  const [routineSheetOpen, setRoutineSheetOpen] = useState(false);
+  const [routineSheetType, setRoutineSheetType] = useState("morning_routine");
+  const [trainingSheetOpen, setTrainingSheetOpen] = useState(false);
+  const [trainingBlock, setTrainingBlock] = useState<ScheduleBlock | null>(null);
   
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -137,6 +143,34 @@ export default function DashboardPage() {
   const visibleBlocks = todayBlocks.filter(
     (b) => !["sleep", "wake"].includes(b.block_type)
   );
+
+  const actionableTypes = ["morning_routine", "evening_routine", "strategy", "training", "reading"];
+
+  const isActionable = (type: string) => actionableTypes.includes(type);
+
+  const handleBlockClick = (block: ScheduleBlock) => {
+    switch (block.block_type) {
+      case "morning_routine":
+      case "evening_routine":
+      case "strategy":
+        setRoutineSheetType(block.block_type);
+        setRoutineSheetOpen(true);
+        break;
+      case "training":
+        if (block.training_day_id) {
+          setTrainingBlock(block);
+          setTrainingSheetOpen(true);
+        } else {
+          navigate("/training");
+        }
+        break;
+      case "reading":
+        navigate("/journal");
+        break;
+      default:
+        break;
+    }
+  };
 
   if (authLoading) {
     return (
@@ -261,13 +295,19 @@ export default function DashboardPage() {
             ) : (
               visibleBlocks.map((block, index) => {
                 const Icon = getBlockIcon(block.block_type);
+                const actionable = isActionable(block.block_type);
                 return (
                   <motion.div
                     key={block.id}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.4 + index * 0.05 }}
-                    className={cn("time-block", getBlockClass(block.block_type))}
+                    className={cn(
+                      "time-block",
+                      getBlockClass(block.block_type),
+                      actionable && "cursor-pointer active:scale-[0.98] transition-transform"
+                    )}
+                    onClick={actionable ? () => handleBlockClick(block) : undefined}
                   >
                     <div className="flex items-center gap-3">
                       {Icon && <Icon className="h-4 w-4 shrink-0" />}
@@ -277,6 +317,7 @@ export default function DashboardPage() {
                           {formatTime(block.start_time)} – {formatTime(block.end_time)}
                         </p>
                       </div>
+                      {actionable && <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
                     </div>
                   </motion.div>
                 );
@@ -300,6 +341,28 @@ export default function DashboardPage() {
       </div>
 
       <CoachChat />
+
+      {user && (
+        <>
+          <RoutineChecklistSheet
+            open={routineSheetOpen}
+            onOpenChange={setRoutineSheetOpen}
+            userId={user.id}
+            routineType={routineSheetType}
+          />
+          <TrainingBlockSheet
+            open={trainingSheetOpen}
+            onOpenChange={setTrainingSheetOpen}
+            block={trainingBlock}
+            blocks={todayBlocks}
+            userId={user.id}
+            onRescheduleComplete={(updatedBlocks) => {
+              setTodayBlocks(updatedBlocks);
+              setTrainingSheetOpen(false);
+            }}
+          />
+        </>
+      )}
     </MobileLayout>
   );
 }
