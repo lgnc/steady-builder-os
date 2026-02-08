@@ -108,24 +108,40 @@ export function ReviewStep({ data }: ReviewStepProps) {
           </div>
         </div>
 
-        {/* Gym Commute */}
-        {(data.gymCommuteMinutes ?? 0) > 0 && (
+        {/* Commutes */}
+        {((data.commuteMinutes ?? 0) > 0 || (data.gymCommuteMinutes ?? 0) > 0 || (data.workToGymMinutes ?? 0) > 0) && (
           <div className="card-ritual">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 rounded-lg bg-muted">
                 <Car className="h-4 w-4 text-muted-foreground" />
               </div>
-              <h3 className="font-medium">Gym Commute</h3>
+              <h3 className="font-medium">Commutes</h3>
             </div>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">One-way</span>
-                <span className="font-medium">{data.gymCommuteMinutes} min</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total per session</span>
-                <span className="font-medium">{60 + (data.gymCommuteMinutes ?? 0) * 2} min</span>
-              </div>
+              {(data.commuteMinutes ?? 0) > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Home → Work</span>
+                  <span className="font-medium">{data.commuteMinutes} min</span>
+                </div>
+              )}
+              {(data.gymCommuteMinutes ?? 0) > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Home → Gym</span>
+                  <span className="font-medium">{data.gymCommuteMinutes} min</span>
+                </div>
+              )}
+              {(data.workToGymMinutes ?? 0) > 0 && data.workType === "standard" && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Work → Gym</span>
+                  <span className="font-medium">{data.workToGymMinutes} min</span>
+                </div>
+              )}
+              {data.gymToWorkDirect && data.preferredTrainingWindow === "morning" && data.workType === "standard" && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">After gym</span>
+                  <span className="font-medium">Straight to work</span>
+                </div>
+              )}
             </div>
           </div>
         )}

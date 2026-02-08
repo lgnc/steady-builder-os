@@ -57,6 +57,7 @@ export type Database = {
           flexible_work: boolean | null
           friction_points: string[] | null
           gym_commute_minutes: number
+          gym_to_work_direct: boolean
           height_cm: number | null
           id: string
           journaling_openness: number | null
@@ -80,6 +81,7 @@ export type Database = {
           weight_kg: number | null
           work_end: string | null
           work_start: string | null
+          work_to_gym_minutes: number
           work_type: string
         }
         Insert: {
@@ -94,6 +96,7 @@ export type Database = {
           flexible_work?: boolean | null
           friction_points?: string[] | null
           gym_commute_minutes?: number
+          gym_to_work_direct?: boolean
           height_cm?: number | null
           id?: string
           journaling_openness?: number | null
@@ -117,6 +120,7 @@ export type Database = {
           weight_kg?: number | null
           work_end?: string | null
           work_start?: string | null
+          work_to_gym_minutes?: number
           work_type?: string
         }
         Update: {
@@ -131,6 +135,7 @@ export type Database = {
           flexible_work?: boolean | null
           friction_points?: string[] | null
           gym_commute_minutes?: number
+          gym_to_work_direct?: boolean
           height_cm?: number | null
           id?: string
           journaling_openness?: number | null
@@ -154,6 +159,7 @@ export type Database = {
           weight_kg?: number | null
           work_end?: string | null
           work_start?: string | null
+          work_to_gym_minutes?: number
           work_type?: string
         }
         Relationships: []
