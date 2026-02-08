@@ -1,128 +1,76 @@
 
-
-# Expanded Commute System
+# Daily Habit Tracker with Custom Habit Creation
 
 ## Overview
 
-Replace the single "Gym Commute" step with a comprehensive "Your Commutes" step that captures three distinct travel times, plus a routing preference for morning trainers. This data feeds into schedule generation to create accurate, gap-free commute blocks for every day of the week.
+Add an editable daily habit tracker to the Dashboard (Today screen). Users get 4 smart defaults on first load but can freely create, delete, and reorder their own habits at any time. Each habit tracks its own independent streak, and habits are visually split into "build" (introduce a new behavior) and "break" (eliminate a behavior) types.
 
 ---
 
-## What Changes for the User
+## What the User Sees
 
-### Onboarding Step 5: "Your Commutes" (replaces "Gym Commute")
+### Dashboard: New "Daily Habits" Section
 
-The step presents three sliders and one conditional toggle:
+A new card between **Quick Actions** and **Today's Schedule** containing:
 
-**Slider 1 -- Home to Work** (0-60 min, step 5, default 30)
-> How long does it take to get from home to work?
+- Header row: "Daily Habits" label on the left, a pencil (edit) icon button on the right
+- A compact checklist of habits, each showing:
+  - A checkbox on the left
+  - The habit title
+  - A small streak badge on the right (flame icon + day count)
+  - Color accent indicating build (emerald) vs break (rose) type
+- Checked habits get a strikethrough + fade treatment
+- When a habit is checked, the streak badge animates up by one
 
-**Slider 2 -- Home to Gym** (0-60 min, step 5, default 15)
-> How long does it take to get from home to the gym?
+### Creating Custom Habits (Edit Mode)
 
-**Slider 3 -- Work to Gym** (0-60 min, step 5, default 15)
-> How long does it take to get from work to the gym?
+Tapping the pencil icon opens a **bottom sheet** (same visual pattern as the existing Routine Checklist editor) with:
 
-**Toggle (only shown if preferred training window is "morning" AND the user has selected standard work type):**
-> After morning training, do you head straight to work or go home first?
-> - "Go home first" (default)
-> - "Go straight to work"
+- The full list of current habits with up/down reorder arrows and a delete (trash) button per item
+- An **"Add habit" input field** at the bottom with a type selector
+- The type selector is two pill buttons side by side:
+  - **Build** (emerald) -- for habits you want to introduce (e.g., "Meditate 10 min")
+  - **Break** (rose) -- for habits you want to eliminate (e.g., "No scrolling before bed")
+- Users type a habit name, pick the type, and tap the + button to add it
+- Changes persist immediately to the database
+- Deleting a habit is a soft delete (sets `is_active = false`) so streak history is preserved
 
-Below the sliders, a **visual preview** shows what a typical training day looks like based on the user's preferred training window, with all the commute blocks in sequence. This gives immediate feedback on total time commitments.
+### Visual Distinction: Build vs Break
 
-### On the Calendar
+**Build habits** (things to start doing):
+- Emerald/green accent color
+- Checkbox fills emerald when checked
+- Streak badge in emerald
 
-New commute blocks appear with descriptive labels:
-- "Drive to Work" / "Drive Home from Work" -- for work commute
-- "Drive to Gym" / "Drive Home from Gym" -- for home-to-gym legs
-- "Drive to Gym from Work" -- for work-to-gym legs
-- "Gym to Work" -- when going direct from gym to work (morning trainers)
+**Break habits** (things to stop doing):
+- Rose/red accent color
+- Small shield icon instead of the default indicator
+- Checkbox fills rose when checked
+- Streak badge in rose
 
-All commute blocks use the existing orange color scheme (`bg-orange-500/15 border-orange-500/40 text-orange-300`).
+### Smart Defaults (First Load Only)
 
-### Review Step
+When a user first visits the Dashboard and has no habits, these 4 are automatically created:
 
-The commute card expands to show all three values and the routing preference (if applicable).
+| Habit | Type |
+|-------|------|
+| No phone first 30 min | Break |
+| Read 10 pages | Build |
+| Walk 10,000 steps | Build |
+| Drink 2L water | Build |
+
+Users can immediately edit, delete, or add to these. No onboarding step required -- defaults seed lazily on first Dashboard visit.
 
 ---
 
-## Schedule Generation Logic
+## Streak Mechanics
 
-The core improvement: every transition between locations gets an explicit commute block, so the calendar has zero unaccounted-for gaps.
+Each habit has its own independent streak:
 
-### Morning Training (weekday with standard work)
-
-**If "go home first" after gym:**
-```text
-Morning Routine
-  Home -> Gym          (gym_commute_minutes)
-  Training
-  Gym -> Home          (gym_commute_minutes)
-  Home -> Work         (commute_minutes)
-  Work
-  Work -> Home         (commute_minutes)
-Reading / Evening Routine / Sleep
-```
-
-**If "go straight to work" after gym:**
-```text
-Morning Routine
-  Home -> Gym          (gym_commute_minutes)
-  Training
-  Gym -> Work          (work_to_gym_minutes)
-  Work
-  Work -> Home         (commute_minutes)
-Reading / Evening Routine / Sleep
-```
-
-### Evening Training (weekday with standard work)
-
-```text
-Morning Routine
-  Home -> Work         (commute_minutes)
-  Work
-  Work -> Gym          (work_to_gym_minutes)
-  Training
-  Gym -> Home          (gym_commute_minutes)
-Reading / Evening Routine / Sleep
-```
-
-### Afternoon/Midday Training
-
-```text
-Morning Routine
-  Home -> Work         (commute_minutes)
-  Work (continues around training)
-  Work -> Gym          (work_to_gym_minutes)
-  Training
-  Gym -> Work          (work_to_gym_minutes)
-  Work -> Home         (commute_minutes)
-Reading / Evening Routine / Sleep
-```
-
-### Rest Day (weekday)
-
-```text
-Morning Routine
-  Home -> Work         (commute_minutes)
-  Work
-  Work -> Home         (commute_minutes)
-Reading / Evening Routine / Sleep
-```
-
-### Weekend / Non-Work Day with Training
-
-```text
-Morning Routine
-  Home -> Gym          (gym_commute_minutes)
-  Training
-  Gym -> Home          (gym_commute_minutes)
-Reading / Evening Routine / Sleep
-```
-
-### Weekend / Non-Work Day, No Training
-
-No commute blocks.
+- **On check-off**: If last completed yesterday, increment streak by 1. If older, reset to 1. Update longest streak if new record.
+- **On uncheck**: Decrement streak by 1 (minimum 0). Revert last completed date.
+- **On Dashboard load**: Any habit where `last_completed_date` is more than 1 day old gets its streak reset to 0.
+- These per-habit streaks are shown inline next to each habit, not in the top-level streaks row (which stays focused on routines/journaling/strategy).
 
 ---
 
@@ -130,52 +78,108 @@ No commute blocks.
 
 ### Database Migration
 
-Add two new columns to `onboarding_data`:
+**New table: `habits`**
 
-- `work_to_gym_minutes` -- integer, default 15
-- `gym_to_work_direct` -- boolean, default false
+| Column | Type | Default | Notes |
+|--------|------|---------|-------|
+| id | uuid | gen_random_uuid() | Primary key |
+| user_id | uuid | -- | Not null, indexed |
+| title | text | -- | Not null |
+| habit_type | text | 'build' | 'build' or 'break' |
+| sort_order | integer | 0 | For display ordering |
+| is_active | boolean | true | Soft delete flag |
+| current_streak | integer | 0 | Per-habit streak counter |
+| longest_streak | integer | 0 | All-time best |
+| last_completed_date | date | null | For streak calculation |
+| created_at | timestamptz | now() | -- |
 
-The existing `commute_minutes` (home-to-work, default 30) and `gym_commute_minutes` (home-to-gym, default 15) columns are already in place.
+**New table: `habit_completions`**
 
-### Files Changed
+| Column | Type | Default | Notes |
+|--------|------|---------|-------|
+| id | uuid | gen_random_uuid() | Primary key |
+| user_id | uuid | -- | Not null |
+| habit_id | uuid | -- | Not null, references habits(id) on delete cascade |
+| completed_date | date | -- | Not null |
+| created_at | timestamptz | now() | -- |
 
-| File | Change |
-|------|--------|
-| `src/components/onboarding/GymCommuteStep.tsx` | Major rewrite -- rename to "Your Commutes", add three sliders (Home-Work, Home-Gym, Work-Gym), conditional toggle for morning gym-to-work routing, and a visual day preview |
-| `src/pages/Onboarding.tsx` | Add `workToGymMinutes` and `gymToWorkDirect` to `OnboardingData` interface and defaults. Update `completeOnboarding()` to save new fields. Rewrite `generateSchedule()` to add work commute blocks and use correct commute values per scenario |
-| `src/components/onboarding/ReviewStep.tsx` | Expand commute card to show all three values and routing preference |
+Unique constraint on `(user_id, habit_id, completed_date)` to prevent duplicates.
 
-### OnboardingData Interface Changes
+**RLS policies** (both tables): Users can only select/insert/update/delete their own rows, matching the pattern on `routine_checklist_items` and `routine_checklist_completions`.
+
+### New Files
+
+| File | Description |
+|------|-------------|
+| `src/components/dashboard/DailyHabits.tsx` | Main habits section for the Dashboard. Fetches habits and today's completions, renders the inline checklist with per-habit streaks, handles check/uncheck with optimistic updates, seeds defaults on first load. |
+| `src/components/dashboard/HabitEditSheet.tsx` | Bottom sheet for managing habits. Contains the add input with build/break type toggle, reorder controls, and delete buttons. Uses the Sheet component consistent with RoutineChecklistSheet. |
+
+### Modified Files
+
+| File | Changes |
+|------|---------|
+| `src/pages/Dashboard.tsx` | Import and render `DailyHabits` between Quick Actions and Today's Schedule. Pass the user ID. |
+
+### Component: DailyHabits.tsx
+
+Key responsibilities:
+- Fetch active habits ordered by `sort_order`
+- Fetch today's completions from `habit_completions`
+- On mount, run streak decay: reset `current_streak` to 0 for any habit where `last_completed_date` is more than 1 day old
+- If zero habits exist, seed the 4 smart defaults
+- Render each habit row with checkbox, title, type color accent, and streak badge
+- On check: insert into `habit_completions`, update streak fields on the `habits` row
+- On uncheck: delete from `habit_completions`, revert streak
+- Pencil button opens `HabitEditSheet`
+- On sheet close, refetch the habit list
+
+### Component: HabitEditSheet.tsx
+
+Key responsibilities:
+- Display all active habits with up/down reorder arrows and delete buttons
+- **Add habit form**: text input + two pill buttons for type selection (Build / Break)
+- Insert new habit into `habits` table with the selected type and next sort order
+- Delete sets `is_active = false` (soft delete preserves streak history)
+- Reorder updates `sort_order` values via optimistic swap + database persist
+- Follows the same Sheet + motion patterns used in RoutineChecklistSheet
+
+### Color Treatment
+
+Build habits:
+- Unchecked: default border with `text-emerald-500` accent indicator
+- Checked: `bg-emerald-500/10`, checkbox fills emerald, text strikethrough + fade
+- Streak badge: `text-emerald-400`
+
+Break habits:
+- Unchecked: default border with `text-rose-500` accent and shield icon
+- Checked: `bg-rose-500/10`, checkbox fills rose, text strikethrough + fade
+- Streak badge: `text-rose-400`
+
+### Streak Update Logic
+
+On check-off:
+1. If `last_completed_date` is today, skip (already counted)
+2. If `last_completed_date` is yesterday, increment `current_streak` by 1
+3. Otherwise, set `current_streak` to 1
+4. Update `longest_streak` to max of current and longest
+5. Set `last_completed_date` to today
+
+On uncheck:
+1. If `last_completed_date` is not today, skip
+2. Set `current_streak` to max(0, current_streak - 1)
+3. If streak > 0, set `last_completed_date` to yesterday; otherwise set to null
+
+### Default Habits Seeding
+
+When `DailyHabits` mounts and finds zero active habits for the user:
 
 ```text
-// New fields
-workToGymMinutes: number;      // default 15
-gymToWorkDirect: boolean;      // default false
+defaults = [
+    { title: "No phone first 30 min", habit_type: "break", sort_order: 0 },
+    { title: "Read 10 pages",         habit_type: "build", sort_order: 1 },
+    { title: "Walk 10,000 steps",     habit_type: "build", sort_order: 2 },
+    { title: "Drink 2L water",        habit_type: "build", sort_order: 3 },
+]
 ```
 
-The existing `commuteMinutes` field (already in the interface) will now actually be collected and used for home-to-work commute.
-
-### Schedule Generation Rewrite
-
-The `generateSchedule()` function in Onboarding.tsx gets a significant update to its commute logic. Key changes:
-
-1. **Work commute blocks added** -- "Drive to Work" before work start, "Drive Home" after work end, on all weekdays (standard work type)
-2. **Training window routing** -- Morning training uses `gymCommuteMinutes` for home-to-gym and either `gymCommuteMinutes` (go home) or `workToGymMinutes` (go direct to work) for the return leg
-3. **Evening training** uses `workToGymMinutes` for the work-to-gym leg (replacing the current incorrect use of `gymCommuteMinutes`)
-4. **Afternoon training** uses `workToGymMinutes` for both legs (work-gym-work)
-5. **Smart label selection** -- commute block titles reflect the actual route (e.g., "Drive to Gym from Work" vs "Drive to Gym")
-6. **Zero-minute commutes are skipped** -- if any commute value is 0, no block is generated for that leg
-
-### Visual Preview in Commute Step
-
-The preview section dynamically renders a sample day based on:
-- The user's preferred training window (from step 3)
-- All three commute values
-- The gym-to-work toggle state
-
-This shows blocks like: Morning Routine -> Drive to Gym (15 min) -> Training (60 min) -> Drive to Work (10 min) -> Work -> Drive Home (30 min) -- so the user immediately sees total time commitment.
-
-### Step Title Update
-
-Step 5 title changes from "Gym Commute" to "Your Commutes" in the `stepTitles` array.
-
+Inserted in a single batch with the user's ID. No onboarding step needed.
