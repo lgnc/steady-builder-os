@@ -1,63 +1,128 @@
 
 
-# Strategy Block: Weekly Planning Session
+# Expanded Commute System
 
 ## Overview
 
-Add a 45-minute "Strategy Block" to the app -- a weekly planning ritual where users put their phone on Do Not Disturb and map out the entire week ahead. This touches three areas: a new onboarding question, smart schedule placement, and an interactive checklist when tapped.
+Replace the single "Gym Commute" step with a comprehensive "Your Commutes" step that captures three distinct travel times, plus a routing preference for morning trainers. This data feeds into schedule generation to create accurate, gap-free commute blocks for every day of the week.
 
 ---
 
-## 1. New Onboarding Step: "Which day for your Strategy Block?"
+## What Changes for the User
 
-A new step is inserted as **step 4** (between "Work & Time" and "Gym Commute"), pushing all subsequent steps forward by one (total becomes 11 steps).
+### Onboarding Step 5: "Your Commutes" (replaces "Gym Commute")
 
-The step explains what a Strategy Block is and presents 7 day-of-week buttons (Sun-Sat), defaulting to Sunday. Single selection, same pill-button style as the rest day picker in WorkStep.
+The step presents three sliders and one conditional toggle:
 
-**Copy on the step:**
-> **Strategy Block**
-> Pick one day each week for a 45-minute planning session. You'll map out training, meals, meetings, energy management -- the entire week ahead. Phone on Do Not Disturb, full focus.
+**Slider 1 -- Home to Work** (0-60 min, step 5, default 30)
+> How long does it take to get from home to work?
 
-The chosen day is saved as `strategy_day` (integer, 0=Sunday through 6=Saturday) in the `onboarding_data` table.
+**Slider 2 -- Home to Gym** (0-60 min, step 5, default 15)
+> How long does it take to get from home to the gym?
 
----
+**Slider 3 -- Work to Gym** (0-60 min, step 5, default 15)
+> How long does it take to get from work to the gym?
 
-## 2. Smart Time Placement (No Overlaps)
+**Toggle (only shown if preferred training window is "morning" AND the user has selected standard work type):**
+> After morning training, do you head straight to work or go home first?
+> - "Go home first" (default)
+> - "Go straight to work"
 
-The strategy block is placed on the chosen day during schedule generation. The placement logic:
+Below the sliders, a **visual preview** shows what a typical training day looks like based on the user's preferred training window, with all the commute blocks in sequence. This gives immediate feedback on total time commitments.
 
-1. Start with the time right after the morning routine ends on that day
-2. Collect all existing blocks on that day (training, commute, work, etc.) and sort them by start time
-3. Walk through each gap -- if the gap between two blocks (or between morning routine end and the first block) is at least 45 minutes, place it there
-4. If no gap exists before work/training, place it after the last block that ends before evening routine
+### On the Calendar
 
-This ensures it never overlaps with training sessions, commute blocks, or work blocks. It finds the earliest available 45-minute window.
+New commute blocks appear with descriptive labels:
+- "Drive to Work" / "Drive Home from Work" -- for work commute
+- "Drive to Gym" / "Drive Home from Gym" -- for home-to-gym legs
+- "Drive to Gym from Work" -- for work-to-gym legs
+- "Gym to Work" -- when going direct from gym to work (morning trainers)
 
-**The block is draggable** (`is_locked: false` for time, but block_type `strategy` is treated as non-deletable). Users can long-press drag it to a different time if the default slot doesn't suit them, just like any other movable block. It should not be deletable by the user (it's a system block, not a custom event).
+All commute blocks use the existing orange color scheme (`bg-orange-500/15 border-orange-500/40 text-orange-300`).
 
----
+### Review Step
 
-## 3. Strategy Checklist (Tapping the Block)
-
-When tapped on the calendar, the strategy block opens the same `RoutineChecklistSheet` component used by morning and evening routines, but with `routineType = "strategy"`. The sheet already supports any routine type -- it just needs default items and a label for the strategy variant.
-
-**Default checklist items:**
-1. Review upcoming week's commitments
-2. Schedule all training sessions
-3. Plan meals and grocery shop
-4. Block social events and meetings
-5. Identify high-energy vs low-energy days
-6. Set top 3 priorities for the week
-
-These items are seeded during onboarding (same as morning routine items are seeded today). Users can add, remove, and reorder items using the edit mode that already exists in the checklist sheet.
-
-Completing all items increments a `strategy` streak, tracked the same way as morning/evening routine streaks.
+The commute card expands to show all three values and the routing preference (if applicable).
 
 ---
 
-## 4. Review Step Update
+## Schedule Generation Logic
 
-The Review Step (final onboarding screen) gets a new "Strategy Block" card showing the chosen day (e.g., "Sunday"), using an amber/gold icon to match the calendar color.
+The core improvement: every transition between locations gets an explicit commute block, so the calendar has zero unaccounted-for gaps.
+
+### Morning Training (weekday with standard work)
+
+**If "go home first" after gym:**
+```text
+Morning Routine
+  Home -> Gym          (gym_commute_minutes)
+  Training
+  Gym -> Home          (gym_commute_minutes)
+  Home -> Work         (commute_minutes)
+  Work
+  Work -> Home         (commute_minutes)
+Reading / Evening Routine / Sleep
+```
+
+**If "go straight to work" after gym:**
+```text
+Morning Routine
+  Home -> Gym          (gym_commute_minutes)
+  Training
+  Gym -> Work          (work_to_gym_minutes)
+  Work
+  Work -> Home         (commute_minutes)
+Reading / Evening Routine / Sleep
+```
+
+### Evening Training (weekday with standard work)
+
+```text
+Morning Routine
+  Home -> Work         (commute_minutes)
+  Work
+  Work -> Gym          (work_to_gym_minutes)
+  Training
+  Gym -> Home          (gym_commute_minutes)
+Reading / Evening Routine / Sleep
+```
+
+### Afternoon/Midday Training
+
+```text
+Morning Routine
+  Home -> Work         (commute_minutes)
+  Work (continues around training)
+  Work -> Gym          (work_to_gym_minutes)
+  Training
+  Gym -> Work          (work_to_gym_minutes)
+  Work -> Home         (commute_minutes)
+Reading / Evening Routine / Sleep
+```
+
+### Rest Day (weekday)
+
+```text
+Morning Routine
+  Home -> Work         (commute_minutes)
+  Work
+  Work -> Home         (commute_minutes)
+Reading / Evening Routine / Sleep
+```
+
+### Weekend / Non-Work Day with Training
+
+```text
+Morning Routine
+  Home -> Gym          (gym_commute_minutes)
+  Training
+  Gym -> Home          (gym_commute_minutes)
+Reading / Evening Routine / Sleep
+```
+
+### Weekend / Non-Work Day, No Training
+
+No commute blocks.
 
 ---
 
@@ -65,51 +130,52 @@ The Review Step (final onboarding screen) gets a new "Strategy Block" card showi
 
 ### Database Migration
 
-Two changes:
+Add two new columns to `onboarding_data`:
 
-1. **Add `strategy_day` column** to `onboarding_data`:
-   - Type: `integer`, default `0` (Sunday), nullable
-   
-2. **Update `handle_new_user()` function** to add a `strategy` streak row for new users (alongside existing journaling, training, routine streaks)
+- `work_to_gym_minutes` -- integer, default 15
+- `gym_to_work_direct` -- boolean, default false
 
-### New File
+The existing `commute_minutes` (home-to-work, default 30) and `gym_commute_minutes` (home-to-gym, default 15) columns are already in place.
 
-| File | Description |
-|------|-------------|
-| `src/components/onboarding/StrategyStep.tsx` | Day picker component for choosing strategy block day. 7 pill buttons (Sun-Sat), explanation text, amber/gold icon theme. |
+### Files Changed
 
-### Modified Files
+| File | Change |
+|------|--------|
+| `src/components/onboarding/GymCommuteStep.tsx` | Major rewrite -- rename to "Your Commutes", add three sliders (Home-Work, Home-Gym, Work-Gym), conditional toggle for morning gym-to-work routing, and a visual day preview |
+| `src/pages/Onboarding.tsx` | Add `workToGymMinutes` and `gymToWorkDirect` to `OnboardingData` interface and defaults. Update `completeOnboarding()` to save new fields. Rewrite `generateSchedule()` to add work commute blocks and use correct commute values per scenario |
+| `src/components/onboarding/ReviewStep.tsx` | Expand commute card to show all three values and routing preference |
 
-| File | Changes |
-|------|---------|
-| `src/pages/Onboarding.tsx` | Add `strategyDay` to `OnboardingData` interface and defaults. Increment `TOTAL_STEPS` to 11. Insert StrategyStep at position 4 (shifting steps 4-10 to 5-11). Update `stepTitles`. Save `strategy_day` in `completeOnboarding()`. Add strategy block placement logic in `generateSchedule()` with gap-finding algorithm. Seed strategy checklist items in `seedDefaultChecklistItems()`. |
-| `src/components/onboarding/ReviewStep.tsx` | Add a "Strategy Block" card showing the selected day name with amber icon. |
-| `src/pages/Calendar.tsx` | Add `"strategy"` color entry (amber/gold: `bg-amber-500/20 border-amber-500/50 text-amber-300`). Handle strategy block tap to open `RoutineChecklistSheet` with `routineType = "strategy"`. Add strategy to legend. |
-| `src/components/calendar/RoutineChecklistSheet.tsx` | Add `DEFAULT_STRATEGY_ITEMS` array with the 6 checklist items. Extend `seedDefaults` to handle `routine_type = "strategy"`. Update `routineLabel` to show "Strategy Block" when `routineType === "strategy"`. |
-
-### Schedule Generation: Gap-Finding Algorithm
+### OnboardingData Interface Changes
 
 ```text
-function findStrategySlot(dayBlocks, morningRoutineEnd):
-    sort dayBlocks by start_time
-    
-    candidateStart = morningRoutineEnd
-    strategyDuration = 45 minutes
-    
-    for each block in dayBlocks:
-        if block.start_time >= candidateStart + 45min:
-            return candidateStart  // found a gap
-        candidateStart = max(candidateStart, block.end_time)
-    
-    // After all blocks, place it in remaining time
-    return candidateStart
+// New fields
+workToGymMinutes: number;      // default 15
+gymToWorkDirect: boolean;      // default false
 ```
 
-This ensures the strategy block slots into the first available 45-minute window after the morning routine, skipping over any training, commute, or work blocks that might be in the way.
+The existing `commuteMinutes` field (already in the interface) will now actually be collected and used for home-to-work commute.
 
-### Color and Visual Treatment
+### Schedule Generation Rewrite
 
-- Calendar color: `bg-amber-500/20 border-amber-500/50 text-amber-300` (warm amber/gold to signify "planning" activity)
-- Block label: "Strategy Block"
-- Legend entry: amber dot + "Strategy"
+The `generateSchedule()` function in Onboarding.tsx gets a significant update to its commute logic. Key changes:
+
+1. **Work commute blocks added** -- "Drive to Work" before work start, "Drive Home" after work end, on all weekdays (standard work type)
+2. **Training window routing** -- Morning training uses `gymCommuteMinutes` for home-to-gym and either `gymCommuteMinutes` (go home) or `workToGymMinutes` (go direct to work) for the return leg
+3. **Evening training** uses `workToGymMinutes` for the work-to-gym leg (replacing the current incorrect use of `gymCommuteMinutes`)
+4. **Afternoon training** uses `workToGymMinutes` for both legs (work-gym-work)
+5. **Smart label selection** -- commute block titles reflect the actual route (e.g., "Drive to Gym from Work" vs "Drive to Gym")
+6. **Zero-minute commutes are skipped** -- if any commute value is 0, no block is generated for that leg
+
+### Visual Preview in Commute Step
+
+The preview section dynamically renders a sample day based on:
+- The user's preferred training window (from step 3)
+- All three commute values
+- The gym-to-work toggle state
+
+This shows blocks like: Morning Routine -> Drive to Gym (15 min) -> Training (60 min) -> Drive to Work (10 min) -> Work -> Drive Home (30 min) -- so the user immediately sees total time commitment.
+
+### Step Title Update
+
+Step 5 title changes from "Gym Commute" to "Your Commutes" in the `stepTitles` array.
 
