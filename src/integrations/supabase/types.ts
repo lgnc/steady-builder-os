@@ -292,6 +292,33 @@ export type Database = {
         }
         Relationships: []
       }
+      reading_logs: {
+        Row: {
+          created_at: string
+          id: string
+          log_date: string
+          minutes_read: number
+          pages_read: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          log_date?: string
+          minutes_read?: number
+          pages_read?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          log_date?: string
+          minutes_read?: number
+          pages_read?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       routine_checklist_completions: {
         Row: {
           checklist_item_id: string

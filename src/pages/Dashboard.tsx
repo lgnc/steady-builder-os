@@ -1,8 +1,18 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { format, startOfWeek, addDays, isToday } from "date-fns";
-import { Sun, Moon, Dumbbell, BookOpen, PenLine, ChevronRight, Flame } from "lucide-react";
+import { format } from "date-fns";
+import {
+  Sun,
+  Moon,
+  Dumbbell,
+  BookOpen,
+  PenLine,
+  ChevronRight,
+  Flame,
+  CalendarClock,
+  CheckCircle2,
+} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -13,6 +23,7 @@ import { CoachChat } from "@/components/dashboard/CoachChat";
 import { DailyHabits } from "@/components/dashboard/DailyHabits";
 import { RoutineChecklistSheet } from "@/components/calendar/RoutineChecklistSheet";
 import { TrainingBlockSheet } from "@/components/calendar/TrainingBlockSheet";
+import { ReadingLogSheet } from "@/components/dashboard/ReadingLogSheet";
 
 interface ScheduleBlock {
   id: string;
@@ -30,6 +41,16 @@ interface Streak {
   current_streak: number;
 }
 
+const ANCHOR_TYPES = ["morning_routine", "strategy", "training", "reading", "evening_routine"];
+
+const ANCHOR_CONFIG: Record<string, { label: string; icon: typeof Sun }> = {
+  morning_routine: { label: "Morning Routine", icon: Sun },
+  strategy: { label: "Strategy", icon: CalendarClock },
+  training: { label: "Today's Training", icon: Dumbbell },
+  reading: { label: "Reading", icon: BookOpen },
+  evening_routine: { label: "Evening Routine", icon: Moon },
+};
+
 export default function DashboardPage() {
   const [todayBlocks, setTodayBlocks] = useState<ScheduleBlock[]>([]);
   const [streaks, setStreaks] = useState<Streak[]>([]);
@@ -39,7 +60,9 @@ export default function DashboardPage() {
   const [routineSheetType, setRoutineSheetType] = useState("morning_routine");
   const [trainingSheetOpen, setTrainingSheetOpen] = useState(false);
   const [trainingBlock, setTrainingBlock] = useState<ScheduleBlock | null>(null);
-  
+  const [readingSheetOpen, setReadingSheetOpen] = useState(false);
+  const [anchorCompletions, setAnchorCompletions] = useState<Record<string, boolean>>({});
+
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
@@ -50,13 +73,11 @@ export default function DashboardPage() {
   }, [user, authLoading, navigate]);
 
   useEffect(() => {
-    // Update greeting based on time
     const hour = new Date().getHours();
     if (hour < 12) setGreeting("Good morning");
     else if (hour < 17) setGreeting("Good afternoon");
     else setGreeting("Good evening");
 
-    // Update time every minute
     const interval = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(interval);
   }, []);
@@ -65,7 +86,7 @@ export default function DashboardPage() {
     const fetchData = async () => {
       if (!user) return;
 
-      // Check if onboarding is completed
+      // Check onboarding
       const { data: onboardingData } = await supabase
         .from("onboarding_data")
         .select("onboarding_completed")
@@ -77,78 +98,85 @@ export default function DashboardPage() {
         return;
       }
 
-      // Fetch today's schedule
       const today = new Date().getDay();
-      const { data: blocks } = await supabase
-        .from("schedule_blocks")
-        .select("*")
+      const todayDate = format(new Date(), "yyyy-MM-dd");
+
+      // Fetch blocks and streaks in parallel
+      const [blocksRes, streaksRes] = await Promise.all([
+        supabase
+          .from("schedule_blocks")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("day_of_week", today)
+          .order("start_time"),
+        supabase
+          .from("streaks")
+          .select("streak_type, current_streak")
+          .eq("user_id", user.id),
+      ]);
+
+      if (blocksRes.data) setTodayBlocks(blocksRes.data);
+      if (streaksRes.data) setStreaks(streaksRes.data);
+
+      // Fetch completion data for anchors
+      const completions: Record<string, boolean> = {};
+
+      // Routine completions (morning, evening, strategy)
+      const routineTypes = ["morning_routine", "evening_routine", "strategy"];
+      for (const rt of routineTypes) {
+        const [itemsRes, completionsRes] = await Promise.all([
+          supabase
+            .from("routine_checklist_items")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("routine_type", rt),
+          supabase
+            .from("routine_checklist_completions")
+            .select("checklist_item_id")
+            .eq("user_id", user.id)
+            .eq("completed_date", todayDate),
+        ]);
+
+        const totalItems = itemsRes.data?.length ?? 0;
+        if (totalItems > 0) {
+          const itemIds = new Set(itemsRes.data!.map((i) => i.id));
+          const completedForType = completionsRes.data?.filter((c) =>
+            itemIds.has(c.checklist_item_id)
+          ).length ?? 0;
+          completions[rt] = completedForType >= totalItems;
+        }
+      }
+
+      // Training completion
+      const { data: trainingData } = await supabase
+        .from("user_training_schedule")
+        .select("completed")
         .eq("user_id", user.id)
         .eq("day_of_week", today)
-        .order("start_time");
+        .eq("completed", true)
+        .limit(1);
 
-      if (blocks) setTodayBlocks(blocks);
+      completions.training = (trainingData?.length ?? 0) > 0;
 
-      // Fetch streaks
-      const { data: streakData } = await supabase
-        .from("streaks")
-        .select("streak_type, current_streak")
-        .eq("user_id", user.id);
+      // Reading completion
+      const { data: readingData } = await supabase
+        .from("reading_logs")
+        .select("pages_read, minutes_read")
+        .eq("user_id", user.id)
+        .eq("log_date", todayDate)
+        .maybeSingle();
 
-      if (streakData) setStreaks(streakData);
+      completions.reading =
+        !!readingData &&
+        ((readingData.pages_read ?? 0) > 0 || (readingData.minutes_read ?? 0) > 0);
+
+      setAnchorCompletions(completions);
     };
 
     fetchData();
   }, [user, navigate]);
 
-  const getBlockIcon = (type: string) => {
-    switch (type) {
-      case "morning_routine":
-        return Sun;
-      case "evening_routine":
-        return Moon;
-      case "training":
-        return Dumbbell;
-      case "reading":
-        return BookOpen;
-      default:
-        return null;
-    }
-  };
-
-  const getBlockClass = (type: string) => {
-    switch (type) {
-      case "training":
-        return "time-block-training";
-      case "morning_routine":
-      case "evening_routine":
-        return "time-block-routine";
-      case "work":
-        return "time-block-work";
-      case "sleep":
-        return "time-block-sleep";
-      default:
-        return "time-block-routine";
-    }
-  };
-
-  const formatTime = (time: string) => {
-    const [hours, minutes] = time.split(":");
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? "PM" : "AM";
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${minutes} ${ampm}`;
-  };
-
-  // Filter visible blocks (hide sleep and wake for cleaner view)
-  const visibleBlocks = todayBlocks.filter(
-    (b) => !["sleep", "wake"].includes(b.block_type)
-  );
-
-  const actionableTypes = ["morning_routine", "evening_routine", "strategy", "training", "reading"];
-
-  const isActionable = (type: string) => actionableTypes.includes(type);
-
-  const handleBlockClick = (block: ScheduleBlock) => {
+  const handleAnchorClick = (block: ScheduleBlock) => {
     switch (block.block_type) {
       case "morning_routine":
       case "evening_routine":
@@ -165,12 +193,19 @@ export default function DashboardPage() {
         }
         break;
       case "reading":
-        navigate("/journal");
-        break;
-      default:
+        setReadingSheetOpen(true);
         break;
     }
   };
+
+  const anchorBlocks = todayBlocks.filter((b) => ANCHOR_TYPES.includes(b.block_type));
+  // Deduplicate by block_type (keep first)
+  const seenTypes = new Set<string>();
+  const uniqueAnchors = anchorBlocks.filter((b) => {
+    if (seenTypes.has(b.block_type)) return false;
+    seenTypes.add(b.block_type);
+    return true;
+  });
 
   if (authLoading) {
     return (
@@ -235,26 +270,30 @@ export default function DashboardPage() {
             <Button
               variant="outline"
               className="h-auto py-4 flex-col gap-2"
-              onClick={() => navigate("/journal")}
+              onClick={() => {
+                const isMorning = new Date().getHours() < 12;
+                setRoutineSheetType(isMorning ? "morning_routine" : "evening_routine");
+                setRoutineSheetOpen(true);
+              }}
             >
-              <PenLine className="h-5 w-5 text-primary" />
+              {new Date().getHours() < 12 ? (
+                <PenLine className="h-5 w-5 text-primary" />
+              ) : (
+                <Moon className="h-5 w-5 text-primary" />
+              )}
               <span className="text-sm">
-                {new Date().getHours() < 12
-                  ? "Morning Journal"
-                  : new Date().getHours() >= 17
-                    ? "Evening Reflection"
-                    : "Morning Journal"}
+                {new Date().getHours() < 12 ? "Morning Journal" : "Evening Reflection"}
               </span>
             </Button>
             <Button
               variant="outline"
               className="h-auto py-4 flex-col gap-2"
               onClick={() => {
-                const trainingBlock = todayBlocks.find(
+                const tb = todayBlocks.find(
                   (b) => b.block_type === "training" && b.training_day_id
                 );
-                if (trainingBlock?.training_day_id) {
-                  navigate(`/workout/${trainingBlock.training_day_id}`);
+                if (tb?.training_day_id) {
+                  navigate(`/workout/${tb.training_day_id}`);
                 } else {
                   navigate("/training");
                 }
@@ -269,56 +308,42 @@ export default function DashboardPage() {
         {/* Daily Habits */}
         {user && <DailyHabits userId={user.id} />}
 
-        {/* Today's Schedule */}
+        {/* Today's Anchors */}
         <motion.section
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
           className="space-y-3"
         >
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-muted-foreground">Today's Schedule</h2>
-            <button
-              onClick={() => navigate("/calendar")}
-              className="text-xs text-primary hover:underline flex items-center gap-1"
-            >
-              View all
-              <ChevronRight className="h-3 w-3" />
-            </button>
-          </div>
-          
+          <h2 className="text-sm font-medium text-muted-foreground">Today's Anchors</h2>
+
           <div className="space-y-2">
-            {visibleBlocks.length === 0 ? (
+            {uniqueAnchors.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">
-                No scheduled blocks for today.
+                Rest day. Recovery is part of the process.
               </p>
             ) : (
-              visibleBlocks.map((block, index) => {
-                const Icon = getBlockIcon(block.block_type);
-                const actionable = isActionable(block.block_type);
+              uniqueAnchors.map((block, index) => {
+                const config = ANCHOR_CONFIG[block.block_type];
+                if (!config) return null;
+                const Icon = config.icon;
+                const completed = anchorCompletions[block.block_type];
+
                 return (
                   <motion.div
                     key={block.id}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.4 + index * 0.05 }}
-                    className={cn(
-                      "time-block",
-                      getBlockClass(block.block_type),
-                      actionable && "cursor-pointer active:scale-[0.98] transition-transform"
-                    )}
-                    onClick={actionable ? () => handleBlockClick(block) : undefined}
+                    className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card cursor-pointer active:scale-[0.98] transition-transform"
+                    onClick={() => handleAnchorClick(block)}
                   >
-                    <div className="flex items-center gap-3">
-                      {Icon && <Icon className="h-4 w-4 shrink-0" />}
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-sm truncate">{block.title}</h3>
-                        <p className="text-xs text-muted-foreground">
-                          {formatTime(block.start_time)} – {formatTime(block.end_time)}
-                        </p>
-                      </div>
-                      {actionable && <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
-                    </div>
+                    <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="flex-1 text-sm font-medium">{config.label}</span>
+                    {completed && (
+                      <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                    )}
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                   </motion.div>
                 );
               })
@@ -360,6 +385,11 @@ export default function DashboardPage() {
               setTodayBlocks(updatedBlocks);
               setTrainingSheetOpen(false);
             }}
+          />
+          <ReadingLogSheet
+            open={readingSheetOpen}
+            onOpenChange={setReadingSheetOpen}
+            userId={user.id}
           />
         </>
       )}
