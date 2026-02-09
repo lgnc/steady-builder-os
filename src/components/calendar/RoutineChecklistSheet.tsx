@@ -103,27 +103,6 @@ export function RoutineChecklistSheet({
     setJournalView(null);
   };
 
-  // Seed default items for existing users who have none
-  const seedDefaults = useCallback(async () => {
-    const defaults = routineType === "morning_routine" 
-      ? DEFAULT_MORNING_ITEMS 
-      : routineType === "strategy"
-      ? DEFAULT_STRATEGY_ITEMS
-      : DEFAULT_EVENING_ITEMS;
-    const rows = defaults.map((title, i) => ({
-      user_id: userId,
-      routine_type: routineType,
-      title,
-      sort_order: i,
-    }));
-
-    const { data } = await supabase
-      .from("routine_checklist_items")
-      .insert(rows)
-      .select("id, title, sort_order");
-
-    return data ?? [];
-  }, [userId, routineType]);
 
   // Fetch items + completions + streak
   const fetchData = useCallback(async () => {
@@ -150,20 +129,13 @@ export function RoutineChecklistSheet({
         .maybeSingle(),
     ]);
 
-    let fetchedItems = itemsRes.data ?? [];
-
-    // Auto-seed defaults for existing users with no items
-    if (fetchedItems.length === 0) {
-      fetchedItems = await seedDefaults();
-    }
-
-    setItems(fetchedItems);
+    setItems(itemsRes.data ?? []);
     if (completionsRes.data) {
       setCompletedIds(new Set(completionsRes.data.map((c: any) => c.checklist_item_id)));
     }
     if (streakRes.data) setStreak(streakRes.data.current_streak ?? 0);
     setLoading(false);
-  }, [userId, routineType, today, open, seedDefaults]);
+  }, [userId, routineType, today, open]);
 
   useEffect(() => {
     if (open) {
