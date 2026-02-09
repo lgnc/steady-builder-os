@@ -118,15 +118,20 @@ export type Database = {
       onboarding_data: {
         Row: {
           activity_level: string | null
+          allergies: string | null
           bedtime: string | null
           calorie_target: number | null
           carb_target: number | null
           commute_minutes: number | null
           created_at: string
+          dietary_choices: string[] | null
           experience_tier: string
           fat_target: number | null
+          fifo_shift_length: number | null
+          fifo_shift_type: string | null
           flexible_work: boolean | null
           friction_points: string[] | null
+          gender: string | null
           gym_commute_minutes: number
           gym_to_work_direct: boolean
           height_cm: number | null
@@ -134,7 +139,10 @@ export type Database = {
           journaling_openness: number | null
           nutrition_confidence: number | null
           onboarding_completed: boolean | null
+          onboarding_habits_break: string[] | null
+          onboarding_habits_build: string[] | null
           onboarding_step: number | null
+          preferred_training_days: string[] | null
           preferred_training_window: string | null
           primary_goals: string[] | null
           protein_target: number | null
@@ -142,6 +150,7 @@ export type Database = {
           rest_days: string[] | null
           secondary_goals: string[] | null
           selected_program: string | null
+          sensitivities: string | null
           sleep_duration: number
           strategy_day: number | null
           stress_level: number | null
@@ -149,6 +158,8 @@ export type Database = {
           updated_at: string
           user_id: string
           wake_time: string
+          weekend_bedtime: string | null
+          weekend_wake_time: string | null
           weight_kg: number | null
           work_end: string | null
           work_start: string | null
@@ -157,15 +168,20 @@ export type Database = {
         }
         Insert: {
           activity_level?: string | null
+          allergies?: string | null
           bedtime?: string | null
           calorie_target?: number | null
           carb_target?: number | null
           commute_minutes?: number | null
           created_at?: string
+          dietary_choices?: string[] | null
           experience_tier?: string
           fat_target?: number | null
+          fifo_shift_length?: number | null
+          fifo_shift_type?: string | null
           flexible_work?: boolean | null
           friction_points?: string[] | null
+          gender?: string | null
           gym_commute_minutes?: number
           gym_to_work_direct?: boolean
           height_cm?: number | null
@@ -173,7 +189,10 @@ export type Database = {
           journaling_openness?: number | null
           nutrition_confidence?: number | null
           onboarding_completed?: boolean | null
+          onboarding_habits_break?: string[] | null
+          onboarding_habits_build?: string[] | null
           onboarding_step?: number | null
+          preferred_training_days?: string[] | null
           preferred_training_window?: string | null
           primary_goals?: string[] | null
           protein_target?: number | null
@@ -181,6 +200,7 @@ export type Database = {
           rest_days?: string[] | null
           secondary_goals?: string[] | null
           selected_program?: string | null
+          sensitivities?: string | null
           sleep_duration?: number
           strategy_day?: number | null
           stress_level?: number | null
@@ -188,6 +208,8 @@ export type Database = {
           updated_at?: string
           user_id: string
           wake_time?: string
+          weekend_bedtime?: string | null
+          weekend_wake_time?: string | null
           weight_kg?: number | null
           work_end?: string | null
           work_start?: string | null
@@ -196,15 +218,20 @@ export type Database = {
         }
         Update: {
           activity_level?: string | null
+          allergies?: string | null
           bedtime?: string | null
           calorie_target?: number | null
           carb_target?: number | null
           commute_minutes?: number | null
           created_at?: string
+          dietary_choices?: string[] | null
           experience_tier?: string
           fat_target?: number | null
+          fifo_shift_length?: number | null
+          fifo_shift_type?: string | null
           flexible_work?: boolean | null
           friction_points?: string[] | null
+          gender?: string | null
           gym_commute_minutes?: number
           gym_to_work_direct?: boolean
           height_cm?: number | null
@@ -212,7 +239,10 @@ export type Database = {
           journaling_openness?: number | null
           nutrition_confidence?: number | null
           onboarding_completed?: boolean | null
+          onboarding_habits_break?: string[] | null
+          onboarding_habits_build?: string[] | null
           onboarding_step?: number | null
+          preferred_training_days?: string[] | null
           preferred_training_window?: string | null
           primary_goals?: string[] | null
           protein_target?: number | null
@@ -220,6 +250,7 @@ export type Database = {
           rest_days?: string[] | null
           secondary_goals?: string[] | null
           selected_program?: string | null
+          sensitivities?: string | null
           sleep_duration?: number
           strategy_day?: number | null
           stress_level?: number | null
@@ -227,6 +258,8 @@ export type Database = {
           updated_at?: string
           user_id?: string
           wake_time?: string
+          weekend_bedtime?: string | null
+          weekend_wake_time?: string | null
           weight_kg?: number | null
           work_end?: string | null
           work_start?: string | null

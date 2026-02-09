@@ -20,12 +20,15 @@ import { FrictionStep } from "@/components/onboarding/FrictionStep";
 import { ReviewStep } from "@/components/onboarding/ReviewStep";
 import { NutritionStep } from "@/components/onboarding/NutritionStep";
 import { StrategyStep } from "@/components/onboarding/StrategyStep";
+import { HabitsStep } from "@/components/onboarding/HabitsStep";
 
 export interface OnboardingData {
   // Sleep
-  wakeTime: string;
+  weekdayWakeTime: string;
+  weekendWakeTime: string;
   sleepDuration: number;
   bedtime: string;
+  weekendBedtime: string;
   
   // Work Type
   workType: "standard" | "shift_work" | "fifo";
@@ -37,6 +40,11 @@ export interface OnboardingData {
   flexibleWork: boolean;
   preferredTrainingWindow: "morning" | "afternoon" | "evening";
   restDays: string[];
+  preferredTrainingDays: string[];
+  
+  // FIFO
+  fifoShiftLength: number | null;
+  fifoShiftType: string | null;
   
   // Commutes
   gymCommuteMinutes: number;
@@ -61,21 +69,31 @@ export interface OnboardingData {
   nutritionConfidence: number;
   
   // Nutrition
+  gender: string | null;
   heightCm?: number;
   weightKg?: number;
   targetWeightKg?: number;
   activityLevel: string;
+  dietaryChoices: string[];
+  allergies: string;
+  sensitivities: string;
 
   // Strategy
   strategyDay: number;
+
+  // Habits
+  habitsBuild: string[];
+  habitsBreak: string[];
 }
 
-const TOTAL_STEPS = 11;
+const TOTAL_STEPS = 12;
 
 const defaultData: OnboardingData = {
-  wakeTime: "06:00",
+  weekdayWakeTime: "06:00",
+  weekendWakeTime: "07:00",
   sleepDuration: 8,
   bedtime: "22:00",
+  weekendBedtime: "23:00",
   workType: "standard",
   workStart: "09:00",
   workEnd: "17:00",
@@ -83,6 +101,9 @@ const defaultData: OnboardingData = {
   flexibleWork: false,
   preferredTrainingWindow: "morning",
   restDays: ["sunday"],
+  preferredTrainingDays: [],
+  fifoShiftLength: null,
+  fifoShiftType: null,
   gymCommuteMinutes: 15,
   workToGymMinutes: 15,
   gymToWorkDirect: false,
@@ -95,8 +116,14 @@ const defaultData: OnboardingData = {
   readingHabit: 5,
   journalingOpenness: 5,
   nutritionConfidence: 5,
+  gender: null,
   activityLevel: "moderate",
+  dietaryChoices: [],
+  allergies: "",
+  sensitivities: "",
   strategyDay: 0,
+  habitsBuild: ["Reading", "No screens before bed", "No coffee for 1 hour after waking", "No social media within 1 hour of waking"],
+  habitsBreak: ["Porn", "Doom scrolling", "Vaping", "Screens before bed"],
 };
 
 export default function OnboardingPage() {
@@ -116,7 +143,6 @@ export default function OnboardingPage() {
   }, [user, authLoading, navigate]);
 
   useEffect(() => {
-    // Check if user already completed onboarding
     const checkOnboarding = async () => {
       if (!user) return;
       
@@ -140,9 +166,9 @@ export default function OnboardingPage() {
     setData((prev) => ({ ...prev, ...updates }));
   };
 
-  // Calculate bedtime from wake time and sleep duration
+  // Calculate weekday bedtime
   useEffect(() => {
-    const [hours, minutes] = data.wakeTime.split(":").map(Number);
+    const [hours, minutes] = data.weekdayWakeTime.split(":").map(Number);
     const wakeMinutes = hours * 60 + minutes;
     const bedMinutes = wakeMinutes - data.sleepDuration * 60;
     const normalizedBedMinutes = bedMinutes < 0 ? bedMinutes + 24 * 60 : bedMinutes;
@@ -152,10 +178,23 @@ export default function OnboardingPage() {
     const bedtime = `${bedHours.toString().padStart(2, "0")}:${bedMins.toString().padStart(2, "0")}`;
     
     setData((prev) => ({ ...prev, bedtime }));
-  }, [data.wakeTime, data.sleepDuration]);
+  }, [data.weekdayWakeTime, data.sleepDuration]);
+
+  // Calculate weekend bedtime
+  useEffect(() => {
+    const [hours, minutes] = data.weekendWakeTime.split(":").map(Number);
+    const wakeMinutes = hours * 60 + minutes;
+    const bedMinutes = wakeMinutes - data.sleepDuration * 60;
+    const normalizedBedMinutes = bedMinutes < 0 ? bedMinutes + 24 * 60 : bedMinutes;
+    
+    const bedHours = Math.floor(normalizedBedMinutes / 60);
+    const bedMins = normalizedBedMinutes % 60;
+    const weekendBedtime = `${bedHours.toString().padStart(2, "0")}:${bedMins.toString().padStart(2, "0")}`;
+    
+    setData((prev) => ({ ...prev, weekendBedtime }));
+  }, [data.weekendWakeTime, data.sleepDuration]);
 
   const handleNext = async () => {
-    // Validate sleep duration
     if (step === 1 && data.sleepDuration < 7) {
       setShowSleepWarning(true);
       return;
@@ -165,7 +204,6 @@ export default function OnboardingPage() {
       const nextStep = step + 1;
       setStep(nextStep);
       
-      // Save progress
       if (user) {
         await supabase
           .from("onboarding_data")
@@ -173,7 +211,6 @@ export default function OnboardingPage() {
           .eq("user_id", user.id);
       }
     } else {
-      // Complete onboarding
       await completeOnboarding();
     }
   };
@@ -191,13 +228,14 @@ export default function OnboardingPage() {
     setLoading(true);
     
     try {
-      // Save all onboarding data
       const { error } = await supabase
         .from("onboarding_data")
         .update({
-          wake_time: data.wakeTime,
+          wake_time: data.weekdayWakeTime,
+          weekend_wake_time: data.weekendWakeTime,
           sleep_duration: data.sleepDuration,
           bedtime: data.bedtime,
+          weekend_bedtime: data.weekendBedtime,
           work_type: data.workType,
           work_start: data.workStart,
           work_end: data.workEnd,
@@ -205,6 +243,9 @@ export default function OnboardingPage() {
           flexible_work: data.flexibleWork,
           preferred_training_window: data.preferredTrainingWindow,
           rest_days: data.restDays,
+          preferred_training_days: data.preferredTrainingDays,
+          fifo_shift_length: data.fifoShiftLength,
+          fifo_shift_type: data.fifoShiftType,
           gym_commute_minutes: data.gymCommuteMinutes,
           work_to_gym_minutes: data.workToGymMinutes,
           gym_to_work_direct: data.gymToWorkDirect,
@@ -217,11 +258,17 @@ export default function OnboardingPage() {
           reading_habit: data.readingHabit,
           journaling_openness: data.journalingOpenness,
           nutrition_confidence: data.nutritionConfidence,
+          gender: data.gender,
           height_cm: data.heightCm,
           weight_kg: data.weightKg,
           target_weight_kg: data.targetWeightKg,
           activity_level: data.activityLevel,
+          dietary_choices: data.dietaryChoices,
+          allergies: data.allergies || null,
+          sensitivities: data.sensitivities || null,
           strategy_day: data.strategyDay,
+          onboarding_habits_build: data.habitsBuild,
+          onboarding_habits_break: data.habitsBreak,
           onboarding_completed: true,
           onboarding_step: TOTAL_STEPS,
         } as any)
@@ -229,11 +276,9 @@ export default function OnboardingPage() {
 
       if (error) throw error;
 
-      // Generate initial schedule
       await generateSchedule();
-
-      // Seed default morning routine checklist items
       await seedDefaultChecklistItems();
+      await seedHabits();
 
       toast({
         title: "Structure installed",
@@ -252,23 +297,43 @@ export default function OnboardingPage() {
     }
   };
 
+  const seedHabits = async () => {
+    if (!user) return;
+
+    const buildHabits = data.habitsBuild.map((title, idx) => ({
+      user_id: user.id,
+      title,
+      habit_type: "build",
+      sort_order: idx,
+    }));
+
+    const breakHabits = data.habitsBreak.map((title, idx) => ({
+      user_id: user.id,
+      title,
+      habit_type: "break",
+      sort_order: idx + buildHabits.length,
+    }));
+
+    if (buildHabits.length > 0 || breakHabits.length > 0) {
+      await supabase.from("habits").insert([...buildHabits, ...breakHabits]);
+    }
+  };
+
   const generateSchedule = async () => {
     if (!user) return;
 
-    // Fetch training days for the selected program
     const { data: trainingDaysData } = await supabase
       .from("training_days")
       .select("*")
       .eq("program_key", data.selectedProgram)
       .order("day_number");
 
-    // Determine which weekdays are available for training (exclude rest days)
-    const allDays = [0, 1, 2, 3, 4, 5, 6]; // Sunday to Saturday
-    const availableDays = allDays.filter(
-      (d) => !data.restDays.includes(getDayName(d).toLowerCase())
-    );
+    // Use preferred training days if set, otherwise fall back to available non-rest days
+    const allDays = [0, 1, 2, 3, 4, 5, 6];
+    const availableDays = data.preferredTrainingDays.length > 0
+      ? allDays.filter((d) => data.preferredTrainingDays.includes(getDayName(d).toLowerCase()))
+      : allDays.filter((d) => !data.restDays.includes(getDayName(d).toLowerCase()));
 
-    // Map training days to available weekdays
     const trainingDayMap: Record<number, string> = {};
     if (trainingDaysData) {
       trainingDaysData.forEach((td, idx) => {
@@ -278,7 +343,6 @@ export default function OnboardingPage() {
       });
     }
 
-    // Commute values
     const homeToWork = data.commuteMinutes || 0;
     const homeToGym = data.gymCommuteMinutes || 0;
     const workToGym = data.workToGymMinutes || 0;
@@ -296,24 +360,24 @@ export default function OnboardingPage() {
         ? trainingDaysData?.find((t) => t.id === trainingDayMap[day])
         : null;
       const isWeekday = day >= 1 && day <= 5;
+      const isWeekend = !isWeekday;
       const hasWork = isWeekday && isStandard;
+      const wakeTime = isWeekend ? data.weekendWakeTime : data.weekdayWakeTime;
+      const bedtime = isWeekend ? data.weekendBedtime : data.bedtime;
 
-      const morningRoutineEnd = addMinutes(data.wakeTime, morningRoutineMinutes);
+      const morningRoutineEnd = addMinutes(wakeTime, morningRoutineMinutes);
 
-      // --- Morning Routine ---
       blocks.push({
         user_id: user.id,
         block_type: "morning_routine",
         title: "Morning Routine",
-        start_time: data.wakeTime,
+        start_time: wakeTime,
         end_time: morningRoutineEnd,
         day_of_week: day,
         is_locked: true,
       });
 
-      // --- Schedule blocks based on training window ---
       if (hasTraining && data.preferredTrainingWindow === "morning") {
-        // MORNING: Routine → Drive to Gym → Training → [Drive Home → Drive to Work | Gym→Work] → Work → Drive Home
         let cursor = morningRoutineEnd;
 
         if (homeToGym > 0) {
@@ -325,20 +389,16 @@ export default function OnboardingPage() {
         cursor = addMinutes(cursor, trainingDuration);
 
         if (hasWork && gymToWorkDirect) {
-          // Gym → Work directly
           if (workToGym > 0) {
             blocks.push({ user_id: user.id, block_type: "commute", title: "Gym to Work", start_time: cursor, end_time: addMinutes(cursor, workToGym), day_of_week: day, is_locked: true });
             cursor = addMinutes(cursor, workToGym);
           }
-          // Work starts at cursor or data.workStart, whichever is later
           const workStart = cursor > data.workStart ? cursor : data.workStart;
           blocks.push({ user_id: user.id, block_type: "work", title: "Work", start_time: workStart, end_time: data.workEnd, day_of_week: day, is_locked: false });
-          // Drive home from work
           if (homeToWork > 0) {
             blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Work", start_time: data.workEnd, end_time: addMinutes(data.workEnd, homeToWork), day_of_week: day, is_locked: true });
           }
         } else if (hasWork) {
-          // Gym → Home → Work
           if (homeToGym > 0) {
             blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Gym", start_time: cursor, end_time: addMinutes(cursor, homeToGym), day_of_week: day, is_locked: true });
             cursor = addMinutes(cursor, homeToGym);
@@ -351,13 +411,11 @@ export default function OnboardingPage() {
             blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Work", start_time: data.workEnd, end_time: addMinutes(data.workEnd, homeToWork), day_of_week: day, is_locked: true });
           }
         } else {
-          // No work (weekend morning training)
           if (homeToGym > 0) {
             blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Gym", start_time: cursor, end_time: addMinutes(cursor, homeToGym), day_of_week: day, is_locked: true });
           }
         }
       } else if (hasTraining && data.preferredTrainingWindow === "evening") {
-        // EVENING: Routine → Drive to Work → Work → Drive to Gym → Training → Drive Home
         if (hasWork) {
           if (homeToWork > 0) {
             blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Work", start_time: addMinutes(data.workStart, -homeToWork), end_time: data.workStart, day_of_week: day, is_locked: true });
@@ -375,10 +433,8 @@ export default function OnboardingPage() {
             blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Gym", start_time: cursor, end_time: addMinutes(cursor, homeToGym), day_of_week: day, is_locked: true });
           }
         } else {
-          // Weekend evening training
           let cursor = morningRoutineEnd;
           if (homeToGym > 0) {
-            // Place training later in the day for evening vibe
             const eveningStart = "17:00";
             blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Gym", start_time: eveningStart, end_time: addMinutes(eveningStart, homeToGym), day_of_week: day, is_locked: true });
             cursor = addMinutes(eveningStart, homeToGym);
@@ -392,15 +448,12 @@ export default function OnboardingPage() {
           }
         }
       } else if (hasTraining && data.preferredTrainingWindow === "afternoon") {
-        // AFTERNOON: Drive to Work → Work(AM) → Drive to Gym → Training → Drive to Work → Work(PM) → Drive Home
         if (hasWork) {
           if (homeToWork > 0) {
             blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Work", start_time: addMinutes(data.workStart, -homeToWork), end_time: data.workStart, day_of_week: day, is_locked: true });
           }
-          // Work block (full, training happens midday)
           blocks.push({ user_id: user.id, block_type: "work", title: "Work", start_time: data.workStart, end_time: data.workEnd, day_of_week: day, is_locked: false });
 
-          // Midday training
           const trainingStart = "12:00";
           let cursor = trainingStart;
           if (workToGym > 0) {
@@ -415,7 +468,6 @@ export default function OnboardingPage() {
             blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Work", start_time: data.workEnd, end_time: addMinutes(data.workEnd, homeToWork), day_of_week: day, is_locked: true });
           }
         } else {
-          // Weekend afternoon training
           const trainingStart = "12:00";
           let cursor = trainingStart;
           if (homeToGym > 0) {
@@ -428,7 +480,6 @@ export default function OnboardingPage() {
           }
         }
       } else {
-        // REST DAY or non-work day with no training
         if (hasWork) {
           if (homeToWork > 0) {
             blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Work", start_time: addMinutes(data.workStart, -homeToWork), end_time: data.workStart, day_of_week: day, is_locked: true });
@@ -440,47 +491,47 @@ export default function OnboardingPage() {
         }
       }
 
-      // --- Reading time ---
+      // Reading time
       blocks.push({
         user_id: user.id,
         block_type: "reading",
         title: "Read",
-        start_time: addMinutes(data.bedtime, -60),
-        end_time: addMinutes(data.bedtime, -30),
+        start_time: addMinutes(bedtime, -60),
+        end_time: addMinutes(bedtime, -30),
         day_of_week: day,
         is_locked: true,
       });
 
-      // --- Evening Routine ---
+      // Evening Routine
       blocks.push({
         user_id: user.id,
         block_type: "evening_routine",
         title: "Evening Routine",
-        start_time: addMinutes(data.bedtime, -30),
-        end_time: data.bedtime,
+        start_time: addMinutes(bedtime, -30),
+        end_time: bedtime,
         day_of_week: day,
         is_locked: true,
       });
 
-      // --- Sleep ---
+      // Sleep
       blocks.push({
         user_id: user.id,
         block_type: "sleep",
         title: "Sleep",
-        start_time: data.bedtime,
-        end_time: data.wakeTime,
+        start_time: bedtime,
+        end_time: wakeTime,
         day_of_week: day,
         is_locked: true,
       });
     });
 
-    // --- Strategy Block (only on the chosen strategy day) ---
+    // Strategy Block
     const strategyDay = data.strategyDay;
     const strategyDayBlocks = blocks.filter((b: any) => b.day_of_week === strategyDay && b.block_type !== "sleep");
     const morningRoutineOnStrategyDay = strategyDayBlocks.find((b: any) => b.block_type === "morning_routine");
-    const morningRoutineEndTime = morningRoutineOnStrategyDay ? morningRoutineOnStrategyDay.end_time : addMinutes(data.wakeTime, 45);
+    const strategyWakeTime = (strategyDay >= 1 && strategyDay <= 5) ? data.weekdayWakeTime : data.weekendWakeTime;
+    const morningRoutineEndTime = morningRoutineOnStrategyDay ? morningRoutineOnStrategyDay.end_time : addMinutes(strategyWakeTime, 45);
 
-    // Gap-finding algorithm
     const otherBlocks = strategyDayBlocks
       .filter((b: any) => b.block_type !== "morning_routine")
       .sort((a: any, b: any) => a.start_time.localeCompare(b.start_time));
@@ -491,7 +542,7 @@ export default function OnboardingPage() {
     for (const block of otherBlocks) {
       const candidateEnd = addMinutes(strategyStart, strategyDurationMinutes);
       if (candidateEnd <= block.start_time) {
-        break; // found a gap
+        break;
       }
       if (block.end_time > strategyStart) {
         strategyStart = block.end_time;
@@ -510,7 +561,6 @@ export default function OnboardingPage() {
 
     await supabase.from("schedule_blocks").insert(blocks);
 
-    // Create user_training_schedule entries
     if (trainingDaysData) {
       const scheduleEntries = Object.entries(trainingDayMap).map(
         ([dayOfWeek, trainingDayId]) => ({
@@ -567,12 +617,12 @@ export default function OnboardingPage() {
     "Your Goals",
     "Current State",
     "Body & Nutrition",
+    "Habits",
     "Review & Install",
   ];
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header with progress */}
       <header className="px-6 py-6 border-b border-border/50">
         <div className="max-w-md mx-auto space-y-4">
           <div className="flex items-center justify-between">
@@ -585,7 +635,6 @@ export default function OnboardingPage() {
         </div>
       </header>
 
-      {/* Main content */}
       <main className="flex-1 overflow-auto px-6 py-8">
         <div className="max-w-md mx-auto">
           <AnimatePresence mode="wait">
@@ -613,13 +662,13 @@ export default function OnboardingPage() {
               {step === 8 && <GoalsStep data={data} updateData={updateData} />}
               {step === 9 && <FrictionStep data={data} updateData={updateData} />}
               {step === 10 && <NutritionStep data={data} updateData={updateData} />}
-              {step === 11 && <ReviewStep data={data} />}
+              {step === 11 && <HabitsStep data={data} updateData={updateData} />}
+              {step === 12 && <ReviewStep data={data} />}
             </motion.div>
           </AnimatePresence>
         </div>
       </main>
 
-      {/* Footer navigation */}
       <footer className="px-6 py-6 border-t border-border/50 safe-bottom">
         <div className="max-w-md mx-auto flex items-center justify-between gap-4">
           {step > 1 ? (
@@ -674,7 +723,6 @@ function addMinutes(time: string, minutes: number): string {
   return `${newHours.toString().padStart(2, "0")}:${newMins.toString().padStart(2, "0")}`;
 }
 
-// Default morning routine checklist items
 const DEFAULT_MORNING_ITEMS = [
   "Hydrate (500ml water)",
   "Make bed",
@@ -684,7 +732,6 @@ const DEFAULT_MORNING_ITEMS = [
   "Review today's schedule",
 ];
 
-// Default strategy block checklist items
 const DEFAULT_STRATEGY_ITEMS = [
   "Review upcoming week's commitments",
   "Schedule all training sessions",

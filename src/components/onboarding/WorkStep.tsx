@@ -1,4 +1,4 @@
-import { Briefcase, Clock, Sun, Moon, Sunset } from "lucide-react";
+import { Briefcase, Clock, Sun, Moon, Sunset, Dumbbell, AlertCircle } from "lucide-react";
 import { OnboardingData } from "@/pages/Onboarding";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -25,12 +25,33 @@ const daysOfWeek = [
   { value: "saturday", label: "Sat" },
 ];
 
+const shiftLengths = [
+  { value: 10, label: "10 hours" },
+  { value: 12, label: "12 hours" },
+];
+
+const shiftTypes = [
+  { value: "days", label: "Days" },
+  { value: "nights", label: "Nights" },
+];
+
 export function WorkStep({ data, updateData }: WorkStepProps) {
   const toggleRestDay = (day: string) => {
     const newRestDays = data.restDays.includes(day)
       ? data.restDays.filter((d) => d !== day)
       : [...data.restDays, day];
-    updateData({ restDays: newRestDays });
+    // Remove from training days if adding as rest day
+    const newTrainingDays = data.preferredTrainingDays.filter((d) => !newRestDays.includes(d));
+    updateData({ restDays: newRestDays, preferredTrainingDays: newTrainingDays });
+  };
+
+  const toggleTrainingDay = (day: string) => {
+    // Prevent selecting a rest day as training day
+    if (data.restDays.includes(day)) return;
+    const newTrainingDays = data.preferredTrainingDays.includes(day)
+      ? data.preferredTrainingDays.filter((d) => d !== day)
+      : [...data.preferredTrainingDays, day];
+    updateData({ preferredTrainingDays: newTrainingDays });
   };
 
   const isStandard = data.workType === "standard";
@@ -100,14 +121,58 @@ export function WorkStep({ data, updateData }: WorkStepProps) {
           </div>
         )}
 
-        {/* FIFO info */}
+        {/* FIFO info + on-site fields */}
         {isFifo && (
-          <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
-            <p className="text-sm text-muted-foreground">
-              🔄 We'll build your schedule for your home period first.
-              You can toggle between <span className="font-medium text-foreground">home</span> and <span className="font-medium text-foreground">on-site</span> modes
-              from the calendar to switch your routine.
-            </p>
+          <div className="space-y-4">
+            <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
+              <p className="text-sm text-muted-foreground">
+                🔄 We'll build your schedule for your home period first.
+                You can toggle between <span className="font-medium text-foreground">home</span> and <span className="font-medium text-foreground">on-site</span> modes
+                from the calendar to switch your routine.
+              </p>
+            </div>
+
+            {/* FIFO Shift Length */}
+            <div className="space-y-3">
+              <label className="text-sm font-medium">On-site shift length</label>
+              <div className="grid grid-cols-2 gap-2">
+                {shiftLengths.map((sl) => (
+                  <button
+                    key={sl.value}
+                    onClick={() => updateData({ fifoShiftLength: sl.value })}
+                    className={cn(
+                      "p-3 rounded-lg border text-sm font-medium transition-all duration-200",
+                      data.fifoShiftLength === sl.value
+                        ? "bg-primary/10 border-primary text-foreground"
+                        : "bg-muted/50 border-border text-muted-foreground hover:bg-muted"
+                    )}
+                  >
+                    {sl.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* FIFO Shift Type */}
+            <div className="space-y-3">
+              <label className="text-sm font-medium">On-site shift type</label>
+              <div className="grid grid-cols-2 gap-2">
+                {shiftTypes.map((st) => (
+                  <button
+                    key={st.value}
+                    onClick={() => updateData({ fifoShiftType: st.value })}
+                    className={cn(
+                      "p-3 rounded-lg border text-sm font-medium transition-all duration-200",
+                      data.fifoShiftType === st.value
+                        ? "bg-primary/10 border-primary text-foreground"
+                        : "bg-muted/50 border-border text-muted-foreground hover:bg-muted"
+                    )}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -134,6 +199,38 @@ export function WorkStep({ data, updateData }: WorkStepProps) {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Preferred Training Days */}
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <Dumbbell className="h-4 w-4 text-primary" />
+            Preferred training days
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {daysOfWeek.map((day) => {
+              const isRestDay = data.restDays.includes(day.value);
+              const isSelected = data.preferredTrainingDays.includes(day.value);
+              return (
+                <button
+                  key={day.value}
+                  onClick={() => toggleTrainingDay(day.value)}
+                  disabled={isRestDay}
+                  className={cn(
+                    "px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                    isSelected
+                      ? "bg-primary/10 text-primary border border-primary/20"
+                      : isRestDay
+                      ? "bg-muted/30 text-muted-foreground/40 cursor-not-allowed"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  )}
+                >
+                  {day.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">Days marked as rest days are excluded.</p>
         </div>
 
         {/* Rest Days */}

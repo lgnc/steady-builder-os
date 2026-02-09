@@ -1,4 +1,4 @@
-import { Dumbbell } from "lucide-react";
+import { Dumbbell, Info } from "lucide-react";
 import { OnboardingData } from "@/pages/Onboarding";
 import { cn } from "@/lib/utils";
 
@@ -75,6 +75,15 @@ export function TrainingStep({ data, updateData }: TrainingStepProps) {
             </div>
           </button>
         ))}
+      </div>
+
+      <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
+        <div className="flex items-start gap-3">
+          <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+          <p className="text-sm text-muted-foreground">
+            You can upgrade or downgrade your training level at any time based on recovery, fatigue, and stimulus.
+          </p>
+        </div>
       </div>
     </div>
   );
