@@ -1,4 +1,4 @@
-import { Calendar, Zap, Target } from "lucide-react";
+import { Calendar, Zap, Target, Clock } from "lucide-react";
 import { OnboardingData } from "@/pages/Onboarding";
 import { cn } from "@/lib/utils";
 
@@ -87,6 +87,10 @@ export function ProgramStep({ data, updateData }: ProgramStepProps) {
                 <span className="flex items-center gap-1">
                   <Calendar className="h-3.5 w-3.5" />
                   {program.days} days/week
+                </span>
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" />
+                  8 weeks
                 </span>
                 <span className="flex items-center gap-1">
                   <Target className="h-3.5 w-3.5" />

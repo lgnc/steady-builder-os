@@ -1,4 +1,4 @@
-import { Clock, Calendar, Target, Dumbbell, Moon, Car, CalendarClock } from "lucide-react";
+import { Clock, Calendar, Target, Dumbbell, Moon, Car, CalendarClock, Sparkles, Shield } from "lucide-react";
 import { OnboardingData } from "@/pages/Onboarding";
 
 interface ReviewStepProps {
@@ -62,17 +62,25 @@ export function ReviewStep({ data }: ReviewStepProps) {
             </div>
             <h3 className="font-medium">Sleep Schedule</h3>
           </div>
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            <div>
-              <span className="text-muted-foreground block text-xs">Wake</span>
-              <span className="font-medium">{data.wakeTime}</span>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Weekday wake</span>
+              <span className="font-medium">{data.weekdayWakeTime}</span>
             </div>
-            <div>
-              <span className="text-muted-foreground block text-xs">Sleep</span>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Weekend wake</span>
+              <span className="font-medium">{data.weekendWakeTime}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Weekday bedtime</span>
               <span className="font-medium">{data.bedtime}</span>
             </div>
-            <div>
-              <span className="text-muted-foreground block text-xs">Duration</span>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Weekend bedtime</span>
+              <span className="font-medium">{data.weekendBedtime}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Duration</span>
               <span className="font-medium">{data.sleepDuration}h</span>
             </div>
           </div>
@@ -97,10 +105,28 @@ export function ReviewStep({ data }: ReviewStepProps) {
                 <span className="font-medium">{data.workStart} - {data.workEnd}</span>
               </div>
             )}
+            {data.workType === "fifo" && data.fifoShiftLength && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Shift length</span>
+                  <span className="font-medium">{data.fifoShiftLength}h</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Shift type</span>
+                  <span className="font-medium capitalize">{data.fifoShiftType}</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Training window</span>
               <span className="font-medium capitalize">{data.preferredTrainingWindow}</span>
             </div>
+            {data.preferredTrainingDays.length > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Training days</span>
+                <span className="font-medium capitalize">{data.preferredTrainingDays.join(", ")}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Rest days</span>
               <span className="font-medium capitalize">{data.restDays.join(", ")}</span>
@@ -219,6 +245,44 @@ export function ReviewStep({ data }: ReviewStepProps) {
             )}
           </div>
         </div>
+
+        {/* Habits */}
+        {(data.habitsBuild.length > 0 || data.habitsBreak.length > 0) && (
+          <div className="card-ritual">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 rounded-lg bg-emerald-500/10">
+                <Sparkles className="h-4 w-4 text-emerald-400" />
+              </div>
+              <h3 className="font-medium">Habits</h3>
+            </div>
+            <div className="space-y-3 text-sm">
+              {data.habitsBuild.length > 0 && (
+                <div>
+                  <span className="text-muted-foreground text-xs block mb-1">Building</span>
+                  <div className="flex flex-wrap gap-1">
+                    {data.habitsBuild.map((h) => (
+                      <span key={h} className="px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded text-xs">
+                        {h}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {data.habitsBreak.length > 0 && (
+                <div>
+                  <span className="text-muted-foreground text-xs block mb-1">Breaking</span>
+                  <div className="flex flex-wrap gap-1">
+                    {data.habitsBreak.map((h) => (
+                      <span key={h} className="px-2 py-1 bg-rose-500/10 text-rose-400 rounded text-xs">
+                        {h}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Commitment */}
