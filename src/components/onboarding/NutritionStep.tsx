@@ -43,6 +43,24 @@ export function NutritionStep({ data, updateData }: NutritionStepProps) {
         </p>
       </div>
 
+      {/* Age */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <User className="h-4 w-4" />
+          <span>Age</span>
+        </div>
+        <Input
+          id="age"
+          type="number"
+          min={16}
+          max={80}
+          value={data.age || ""}
+          onChange={(e) => updateData({ age: parseInt(e.target.value) || undefined })}
+          placeholder="e.g. 28"
+          className="bg-muted/30"
+        />
+      </div>
+
       {/* Gender */}
       <div className="space-y-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
