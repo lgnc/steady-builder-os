@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      favourite_meals: {
+        Row: {
+          created_at: string
+          id: string
+          meal_data: Json
+          meal_slot: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meal_data?: Json
+          meal_slot: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meal_data?: Json
+          meal_slot?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       habit_completions: {
         Row: {
           completed_date: string
@@ -115,9 +139,126 @@ export type Database = {
         }
         Relationships: []
       }
+      meal_completions: {
+        Row: {
+          completed: boolean
+          created_at: string
+          id: string
+          meal_date: string
+          meal_plan_id: string
+          meal_slot: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean
+          created_at?: string
+          id?: string
+          meal_date: string
+          meal_plan_id: string
+          meal_slot: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean
+          created_at?: string
+          id?: string
+          meal_date?: string
+          meal_plan_id?: string
+          meal_slot?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_completions_meal_plan_id_fkey"
+            columns: ["meal_plan_id"]
+            isOneToOne: false
+            referencedRelation: "meal_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meal_plans: {
+        Row: {
+          compliance_score: number | null
+          created_at: string
+          expires_at: string
+          id: string
+          plan_data: Json
+          user_id: string
+          week_start: string
+        }
+        Insert: {
+          compliance_score?: number | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          plan_data?: Json
+          user_id: string
+          week_start: string
+        }
+        Update: {
+          compliance_score?: number | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          plan_data?: Json
+          user_id?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
+      nutrition_profiles: {
+        Row: {
+          bmr: number
+          calorie_target: number
+          carb_g: number
+          created_at: string
+          dietary_filters: string[] | null
+          fat_g: number
+          generated_at: string
+          id: string
+          meals_per_day: number
+          protein_g: number
+          tdee: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bmr: number
+          calorie_target: number
+          carb_g: number
+          created_at?: string
+          dietary_filters?: string[] | null
+          fat_g: number
+          generated_at?: string
+          id?: string
+          meals_per_day?: number
+          protein_g: number
+          tdee: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bmr?: number
+          calorie_target?: number
+          carb_g?: number
+          created_at?: string
+          dietary_filters?: string[] | null
+          fat_g?: number
+          generated_at?: string
+          id?: string
+          meals_per_day?: number
+          protein_g?: number
+          tdee?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       onboarding_data: {
         Row: {
           activity_level: string | null
+          age: number | null
           allergies: string | null
           bedtime: string | null
           calorie_target: number | null
@@ -168,6 +309,7 @@ export type Database = {
         }
         Insert: {
           activity_level?: string | null
+          age?: number | null
           allergies?: string | null
           bedtime?: string | null
           calorie_target?: number | null
@@ -218,6 +360,7 @@ export type Database = {
         }
         Update: {
           activity_level?: string | null
+          age?: number | null
           allergies?: string | null
           bedtime?: string | null
           calorie_target?: number | null

@@ -69,6 +69,7 @@ export interface OnboardingData {
   nutritionConfidence: number;
   
   // Nutrition
+  age?: number;
   gender: string | null;
   heightCm?: number;
   weightKg?: number;
@@ -258,6 +259,7 @@ export default function OnboardingPage() {
           reading_habit: data.readingHabit,
           journaling_openness: data.journalingOpenness,
           nutrition_confidence: data.nutritionConfidence,
+          age: data.age,
           gender: data.gender,
           height_cm: data.heightCm,
           weight_kg: data.weightKg,
