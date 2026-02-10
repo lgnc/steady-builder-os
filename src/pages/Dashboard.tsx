@@ -14,6 +14,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { getTodayQuote } from "@/data/dailyQuotes";
 import { supabase } from "@/integrations/supabase/client";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { BottomNav } from "@/components/layout/BottomNav";
@@ -222,12 +223,22 @@ export default function DashboardPage() {
         <motion.header
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-1"
+          className="flex items-start justify-between gap-4"
         >
-          <h1 className="text-2xl font-semibold tracking-tight">{greeting}</h1>
-          <p className="text-muted-foreground">
-            {format(currentTime, "EEEE, MMMM d")}
-          </p>
+          <div className="space-y-1">
+            <h1 className="text-2xl font-semibold tracking-tight">{greeting}</h1>
+            <p className="text-muted-foreground">
+              {format(currentTime, "EEEE, MMMM d")}
+            </p>
+          </div>
+          <div className="text-right flex-1 min-w-0">
+            <p className="text-xs italic text-muted-foreground leading-relaxed">
+              "{getTodayQuote().text}"
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              — {getTodayQuote().author}
+            </p>
+          </div>
         </motion.header>
 
         {/* Streaks */}
@@ -351,18 +362,6 @@ export default function DashboardPage() {
           </div>
         </motion.section>
 
-        {/* Daily Quote */}
-        <motion.section
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="card-ritual"
-        >
-          <p className="text-sm text-muted-foreground italic">
-            "Discipline equals freedom."
-          </p>
-          <p className="text-xs text-muted-foreground mt-2">— Jocko Willink</p>
-        </motion.section>
       </div>
 
       <CoachChat />
