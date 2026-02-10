@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { HabitEditSheet } from "./HabitEditSheet";
+import { DailyWeightTracker } from "./DailyWeightTracker";
 
 interface Habit {
   id: string;
@@ -287,6 +288,9 @@ export function DailyHabits({ userId }: DailyHabitsProps) {
               })}
             </AnimatePresence>
           )}
+          <div className="border-t border-border mt-1 pt-1">
+            <DailyWeightTracker userId={userId} />
+          </div>
         </div>
       </motion.section>
 
