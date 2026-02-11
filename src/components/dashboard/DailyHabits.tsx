@@ -28,9 +28,10 @@ const DEFAULT_HABITS = [
 
 interface DailyHabitsProps {
   userId: string;
+  onCompletionChange?: (counts: { total: number; completed: number }) => void;
 }
 
-export function DailyHabits({ userId }: DailyHabitsProps) {
+export function DailyHabits({ userId, onCompletionChange }: DailyHabitsProps) {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [editOpen, setEditOpen] = useState(false);
@@ -100,6 +101,13 @@ export function DailyHabits({ userId }: DailyHabitsProps) {
   useEffect(() => {
     fetchHabits();
   }, [fetchHabits]);
+
+  // Report completion counts to parent
+  useEffect(() => {
+    if (!loading && onCompletionChange) {
+      onCompletionChange({ total: habits.length, completed: completedIds.size });
+    }
+  }, [habits.length, completedIds.size, loading]);
 
   const toggleHabit = async (habit: Habit) => {
     const isCompleted = completedIds.has(habit.id);
@@ -288,7 +296,7 @@ export function DailyHabits({ userId }: DailyHabitsProps) {
               })}
             </AnimatePresence>
           )}
-          <div className="border-t border-border mt-1 pt-1">
+          <div className="border-t border-border/50 mt-1 pt-1">
             <DailyWeightTracker userId={userId} />
           </div>
         </div>

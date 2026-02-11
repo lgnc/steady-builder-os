@@ -77,7 +77,7 @@ export function DailyWeightTracker({ userId }: DailyWeightTrackerProps) {
             value={weight}
             onChange={(e) => setWeight(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSave()}
-            className="h-8 w-20 text-sm"
+            className="h-8 w-16 text-sm"
             autoFocus={editing}
           />
           <span className="text-xs text-muted-foreground">kg</span>
