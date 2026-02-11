@@ -70,7 +70,7 @@ export function RoutineChecklistSheet({
   const [journalView, setJournalView] = useState<"morning" | "evening" | null>(null);
 
   const today = format(new Date(), "yyyy-MM-dd");
-  const completedCount = completedIds.size;
+  const completedCount = items.filter(item => completedIds.has(item.id)).length;
   const totalCount = items.length;
   const allComplete = totalCount > 0 && completedCount === totalCount;
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
