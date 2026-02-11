@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
@@ -7,10 +7,8 @@ import {
   Moon,
   Dumbbell,
   BookOpen,
-  PenLine,
   ChevronRight,
   Flame,
-  CalendarClock,
   CheckCircle2,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -18,13 +16,13 @@ import { getTodayQuote } from "@/data/dailyQuotes";
 import { supabase } from "@/integrations/supabase/client";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { BottomNav } from "@/components/layout/BottomNav";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CoachChat } from "@/components/dashboard/CoachChat";
 import { DailyHabits } from "@/components/dashboard/DailyHabits";
 import { RoutineChecklistSheet } from "@/components/calendar/RoutineChecklistSheet";
 import { TrainingBlockSheet } from "@/components/calendar/TrainingBlockSheet";
 import { ReadingLogSheet } from "@/components/dashboard/ReadingLogSheet";
+import { ProgressBar } from "@/components/ui/progress-bar";
 
 interface ScheduleBlock {
   id: string;
@@ -42,11 +40,10 @@ interface Streak {
   current_streak: number;
 }
 
-const ANCHOR_TYPES = ["morning_routine", "strategy", "training", "reading", "evening_routine"];
+const ANCHOR_TYPES = ["morning_routine", "training", "reading", "evening_routine"];
 
 const ANCHOR_CONFIG: Record<string, { label: string; icon: typeof Sun }> = {
   morning_routine: { label: "Morning Routine", icon: Sun },
-  strategy: { label: "Strategy", icon: CalendarClock },
   training: { label: "Today's Training", icon: Dumbbell },
   reading: { label: "Reading", icon: BookOpen },
   evening_routine: { label: "Evening Routine", icon: Moon },
@@ -63,6 +60,7 @@ export default function DashboardPage() {
   const [trainingBlock, setTrainingBlock] = useState<ScheduleBlock | null>(null);
   const [readingSheetOpen, setReadingSheetOpen] = useState(false);
   const [anchorCompletions, setAnchorCompletions] = useState<Record<string, boolean>>({});
+  const [habitCounts, setHabitCounts] = useState({ total: 0, completed: 0 });
 
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -87,7 +85,6 @@ export default function DashboardPage() {
     const fetchData = async () => {
       if (!user) return;
 
-      // Check onboarding
       const { data: onboardingData } = await supabase
         .from("onboarding_data")
         .select("onboarding_completed")
@@ -102,7 +99,6 @@ export default function DashboardPage() {
       const today = new Date().getDay();
       const todayDate = format(new Date(), "yyyy-MM-dd");
 
-      // Fetch blocks and streaks in parallel
       const [blocksRes, streaksRes] = await Promise.all([
         supabase
           .from("schedule_blocks")
@@ -113,7 +109,8 @@ export default function DashboardPage() {
         supabase
           .from("streaks")
           .select("streak_type, current_streak")
-          .eq("user_id", user.id),
+          .eq("user_id", user.id)
+          .in("streak_type", ["training", "morning_routine"]),
       ]);
 
       if (blocksRes.data) setTodayBlocks(blocksRes.data);
@@ -122,8 +119,7 @@ export default function DashboardPage() {
       // Fetch completion data for anchors
       const completions: Record<string, boolean> = {};
 
-      // Routine completions (morning, evening, strategy)
-      const routineTypes = ["morning_routine", "evening_routine", "strategy"];
+      const routineTypes = ["morning_routine", "evening_routine"];
       for (const rt of routineTypes) {
         const [itemsRes, completionsRes] = await Promise.all([
           supabase
@@ -148,7 +144,6 @@ export default function DashboardPage() {
         }
       }
 
-      // Training completion
       const { data: trainingData } = await supabase
         .from("user_training_schedule")
         .select("completed")
@@ -159,7 +154,6 @@ export default function DashboardPage() {
 
       completions.training = (trainingData?.length ?? 0) > 0;
 
-      // Reading completion
       const { data: readingData } = await supabase
         .from("reading_logs")
         .select("pages_read, minutes_read")
@@ -177,11 +171,32 @@ export default function DashboardPage() {
     fetchData();
   }, [user, navigate]);
 
+  // Daily completion % calculation
+  const getDailyCompletion = useCallback(() => {
+    let total = habitCounts.total;
+    let completed = habitCounts.completed;
+
+    // Training counts if scheduled today
+    const hasTraining = todayBlocks.some((b) => b.block_type === "training");
+    if (hasTraining) {
+      total++;
+      if (anchorCompletions.training) completed++;
+    }
+
+    // Morning routine counts if scheduled today
+    const hasMorning = todayBlocks.some((b) => b.block_type === "morning_routine");
+    if (hasMorning) {
+      total++;
+      if (anchorCompletions.morning_routine) completed++;
+    }
+
+    return total > 0 ? Math.round((completed / total) * 100) : 0;
+  }, [habitCounts, todayBlocks, anchorCompletions]);
+
   const handleAnchorClick = (block: ScheduleBlock) => {
     switch (block.block_type) {
       case "morning_routine":
       case "evening_routine":
-      case "strategy":
         setRoutineSheetType(block.block_type);
         setRoutineSheetOpen(true);
         break;
@@ -200,13 +215,16 @@ export default function DashboardPage() {
   };
 
   const anchorBlocks = todayBlocks.filter((b) => ANCHOR_TYPES.includes(b.block_type));
-  // Deduplicate by block_type (keep first)
   const seenTypes = new Set<string>();
   const uniqueAnchors = anchorBlocks.filter((b) => {
     if (seenTypes.has(b.block_type)) return false;
     seenTypes.add(b.block_type);
     return true;
   });
+
+  const trainingStreak = streaks.find((s) => s.streak_type === "training")?.current_streak ?? 0;
+  const morningStreak = streaks.find((s) => s.streak_type === "morning_routine")?.current_streak ?? 0;
+  const completionPct = getDailyCompletion();
 
   if (authLoading) {
     return (
@@ -232,92 +250,54 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="text-right flex-1 min-w-0">
-            <p className="text-xs italic text-muted-foreground leading-relaxed">
+            <p className="text-sm italic text-muted-foreground leading-relaxed">
               "{getTodayQuote().text}"
             </p>
-            <p className="text-[11px] text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               — {getTodayQuote().author}
             </p>
           </div>
         </motion.header>
 
-        {/* Streaks */}
+        {/* Daily Completion + Streaks */}
         <motion.section
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="flex gap-3"
+          className="flex gap-3 items-stretch"
         >
-          {streaks.map((streak) => (
-            <div
-              key={streak.streak_type}
-              className="flex-1 card-stat flex items-center gap-2"
-            >
-              <Flame
-                className={cn(
-                  "h-4 w-4",
-                  streak.current_streak > 0 ? "text-primary" : "text-muted-foreground"
-                )}
-              />
-              <div>
-                <span className="text-lg font-semibold">{streak.current_streak}</span>
-                <span className="text-xs text-muted-foreground ml-1 capitalize">
-                  {streak.streak_type}
-                </span>
-              </div>
-            </div>
-          ))}
-        </motion.section>
+          {/* Completion % */}
+          <div className="flex-[1.5] card-stat flex flex-col justify-center gap-1.5 p-3">
+            <span className="text-xs text-muted-foreground">Today: {completionPct}%</span>
+            <ProgressBar value={completionPct} />
+          </div>
 
-        {/* Quick Actions */}
-        <motion.section
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="space-y-3"
-        >
-          <h2 className="text-sm font-medium text-muted-foreground">Quick Actions</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              variant="outline"
-              className="h-auto py-4 flex-col gap-2"
-              onClick={() => {
-                const isMorning = new Date().getHours() < 12;
-                setRoutineSheetType(isMorning ? "morning_routine" : "evening_routine");
-                setRoutineSheetOpen(true);
-              }}
-            >
-              {new Date().getHours() < 12 ? (
-                <PenLine className="h-5 w-5 text-primary" />
-              ) : (
-                <Moon className="h-5 w-5 text-primary" />
-              )}
-              <span className="text-sm">
-                {new Date().getHours() < 12 ? "Morning Journal" : "Evening Reflection"}
-              </span>
-            </Button>
-            <Button
-              variant="outline"
-              className="h-auto py-4 flex-col gap-2"
-              onClick={() => {
-                const tb = todayBlocks.find(
-                  (b) => b.block_type === "training" && b.training_day_id
-                );
-                if (tb?.training_day_id) {
-                  navigate(`/workout/${tb.training_day_id}`);
-                } else {
-                  navigate("/training");
-                }
-              }}
-            >
-              <Dumbbell className="h-5 w-5 text-primary" />
-              <span className="text-sm">Today's Training</span>
-            </Button>
+          {/* Training Streak */}
+          <div className="flex-1 card-stat flex items-center gap-2 p-3">
+            <Flame className={cn("h-4 w-4", trainingStreak > 0 ? "text-primary" : "text-muted-foreground")} />
+            <div>
+              <span className="text-lg font-semibold">{trainingStreak}</span>
+              <span className="text-xs text-muted-foreground ml-1">Training</span>
+            </div>
+          </div>
+
+          {/* Morning Streak */}
+          <div className="flex-1 card-stat flex items-center gap-2 p-3">
+            <Flame className={cn("h-4 w-4", morningStreak > 0 ? "text-primary" : "text-muted-foreground")} />
+            <div>
+              <span className="text-lg font-semibold">{morningStreak}</span>
+              <span className="text-xs text-muted-foreground ml-1">Morning</span>
+            </div>
           </div>
         </motion.section>
 
         {/* Daily Habits */}
-        {user && <DailyHabits userId={user.id} />}
+        {user && (
+          <DailyHabits
+            userId={user.id}
+            onCompletionChange={setHabitCounts}
+          />
+        )}
 
         {/* Today's Anchors */}
         <motion.section
