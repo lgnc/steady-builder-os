@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { format } from "date-fns";
+import { format, startOfWeek } from "date-fns";
 import {
   Sun,
   Moon,
@@ -61,6 +61,7 @@ export default function DashboardPage() {
   const [readingSheetOpen, setReadingSheetOpen] = useState(false);
   const [anchorCompletions, setAnchorCompletions] = useState<Record<string, boolean>>({});
   const [habitCounts, setHabitCounts] = useState({ total: 0, completed: 0 });
+  const [nutritionCounts, setNutritionCounts] = useState({ total: 0, completed: 0 });
 
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -166,6 +167,41 @@ export default function DashboardPage() {
         ((readingData.pages_read ?? 0) > 0 || (readingData.minutes_read ?? 0) > 0);
 
       setAnchorCompletions(completions);
+
+      // Fetch nutrition meal counts for today
+      const { data: mealPlan } = await supabase
+        .from("meal_plans")
+        .select("id, plan_data, week_start")
+        .eq("user_id", user.id)
+        .gte("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (mealPlan?.plan_data) {
+        const monday = startOfWeek(new Date(mealPlan.week_start + "T00:00:00"), { weekStartsOn: 1 });
+        const diff = Math.floor((new Date().getTime() - monday.getTime()) / (1000 * 60 * 60 * 24));
+        const todayDayIndex = Math.max(1, Math.min(7, diff + 1));
+        const planData = mealPlan.plan_data as any;
+        const todayMeals = planData?.days?.find((d: any) => d.day === todayDayIndex)?.meals || [];
+        const totalMeals = todayMeals.length;
+
+        if (totalMeals > 0) {
+          const { data: mealCompletions } = await supabase
+            .from("meal_completions")
+            .select("meal_slot")
+            .eq("user_id", user.id)
+            .eq("meal_plan_id", mealPlan.id)
+            .eq("meal_date", todayDate)
+            .eq("completed", true);
+
+          setNutritionCounts({ total: totalMeals, completed: mealCompletions?.length ?? 0 });
+        } else {
+          setNutritionCounts({ total: 0, completed: 0 });
+        }
+      } else {
+        setNutritionCounts({ total: 0, completed: 0 });
+      }
     };
 
     fetchData();
@@ -190,8 +226,12 @@ export default function DashboardPage() {
       if (anchorCompletions.morning_routine) completed++;
     }
 
+    // Nutrition meals count
+    total += nutritionCounts.total;
+    completed += nutritionCounts.completed;
+
     return total > 0 ? Math.round((completed / total) * 100) : 0;
-  }, [habitCounts, todayBlocks, anchorCompletions]);
+  }, [habitCounts, todayBlocks, anchorCompletions, nutritionCounts]);
 
   const handleAnchorClick = (block: ScheduleBlock) => {
     switch (block.block_type) {
