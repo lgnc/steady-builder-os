@@ -1,38 +1,52 @@
 
 
-# Fix: Evening Routine Completion Counter Bug
+# Add Nutrition to Daily Completion %
 
-## Problem
+## What Changes
 
-When opening the Evening Routine, the "X/5 complete" counter shows inflated numbers (e.g., "4/5" with nothing ticked) because it's counting completions from OTHER routines (like morning routine items already checked off earlier in the day).
+Add today's meal completion status to the daily progress bar calculation. If the user has an active meal plan, each meal scheduled for today counts as a completable item.
 
-## Root Cause
+## How It Works
 
-In `RoutineChecklistSheet.tsx`, the completions query (line 119-124) fetches all `routine_checklist_completions` for today without filtering by routine type. The `completedIds` Set then contains IDs from morning, evening, and strategy routines. The counter uses `completedIds.size` (line 73), which counts everything -- not just items belonging to the current routine.
+In `Dashboard.tsx`'s `fetchData`:
 
-The checkboxes themselves look correct because they match against item IDs that ARE in the filtered `items` array, but the counter is wrong.
+1. Query `meal_plans` for the user's latest active plan (not expired)
+2. If a plan exists, extract today's meals from `plan_data.days` (matching today's day index within the week)
+3. Query `meal_completions` for today's date filtered to that plan
+4. Store the counts: total meals today and completed meals today
 
-## Fix
+In `getDailyCompletion`:
 
-One line change in `RoutineChecklistSheet.tsx`:
+- Add nutrition meal counts (total and completed) alongside habits, training, and morning routine
 
-**Line 73** -- Change `completedCount` to only count IDs that exist in the current routine's items:
+## Technical Detail
+
+### State additions in `Dashboard.tsx`
 
 ```typescript
-// Before:
-const completedCount = completedIds.size;
-
-// After:
-const completedCount = items.filter(item => completedIds.has(item.id)).length;
+const [nutritionCounts, setNutritionCounts] = useState({ total: 0, completed: 0 });
 ```
 
-This ensures the counter only reflects items belonging to the currently displayed routine, ignoring completion records from other routine types.
+### In the existing `fetchData` effect, add after the reading query:
+
+- Fetch the latest non-expired `meal_plans` row
+- If a plan exists, determine today's day index relative to `week_start` (same logic as `DailyPlanView`)
+- Count total meals for that day from `plan_data.days`
+- Fetch `meal_completions` for today's date and that plan, count completed
+- Set `nutritionCounts`
+
+### In `getDailyCompletion`, add:
+
+```typescript
+total += nutritionCounts.total;
+completed += nutritionCounts.completed;
+```
 
 ## Files Modified
 
 | File | Change |
 |---|---|
-| `src/components/calendar/RoutineChecklistSheet.tsx` | Fix `completedCount` calculation to filter by current routine items (line 73) |
+| `src/pages/Dashboard.tsx` | Add `nutritionCounts` state; fetch meal plan + completions in `fetchData`; include in `getDailyCompletion` |
 
-No database changes needed. No other files affected.
+No database changes needed.
 
