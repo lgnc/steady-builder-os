@@ -1,59 +1,93 @@
 
 
-# 365 Daily Stoic Quotes -- Moved to Header
+# Dashboard MVP Refinement
 
-## What Changes
+## Overview
 
-1. **New data file**: Create `src/data/dailyQuotes.ts` containing an array of 365 quotes covering stoicism, discipline, motivation, introspection, confidence, masculinity, personal responsibility, and direction in life. Each entry has `text` and `author`. Sources include Marcus Aurelius, Seneca, Epictetus, Jocko Willink, David Goggins, Jordan Peterson, Theodore Roosevelt, Miyamoto Musashi, Ryan Holiday, and others.
-
-2. **Quote selection logic**: Use the day-of-year (1--365) as the array index so every calendar day shows a unique quote, and it resets annually. Deterministic -- no randomness, same quote on the same date for every user.
-
-3. **Move quote into the header**: The current bottom-of-page quote section gets removed. Instead, the greeting header area becomes a two-column layout:
-   - **Left**: "Good morning" / "Good evening" + date (unchanged)
-   - **Right**: The daily quote in small italic text with the author beneath it, right-aligned
-
-4. **No database needed**: The quotes live as a static TypeScript array. No API calls, no tables.
+Clean up the Today dashboard to be scannable in under 5 seconds. No navigation or layout system changes -- just streamlining sections within the existing page.
 
 ---
 
-## Technical Detail
+## 1. Replace Streaks Section with Daily Completion + 2 Streaks
 
-### New file: `src/data/dailyQuotes.ts`
+**Remove**: The current streaks section that renders ALL streak types from the database (strategy, routine, morning_routine, etc.).
 
-A single exported array of 365 objects: `{ text: string; author: string }`. The quotes will be hand-curated across themes: stoicism, discipline, adversity, self-mastery, purpose, masculinity, responsibility, introspection, confidence.
+**Replace with** a new section containing three items in a single row:
 
-Helper function:
+| Item | Source | Display |
+|---|---|---|
+| Daily Completion % | Calculated client-side | "Today: XX%" with a horizontal progress bar beneath |
+| Training Streak | `streaks` table, `streak_type = 'training'` | Flame icon + number + "Training" |
+| Morning Routine Streak | `streaks` table, `streak_type = 'morning_routine'` | Flame icon + number + "Morning" |
 
-```typescript
-export function getTodayQuote(): { text: string; author: string } {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 0);
-  const dayOfYear = Math.floor((now.getTime() - start.getTime()) / 86400000);
-  return DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
-}
-```
+**Daily Completion % calculation:**
+- Count completable items for today:
+  - Daily habits (from `habits` table, active ones)
+  - Training (if a training block is scheduled today)
+  - Morning routine (if morning_routine anchor exists today)
+- Count completed items:
+  - Habits completed today (from `habit_completions`)
+  - Training completed (from `anchorCompletions.training`)
+  - Morning routine completed (from `anchorCompletions.morning_routine`)
+- Evening reflection and weight are NOT counted (optional)
+- Percentage = (completed / total) x 100
 
-### Modified file: `src/pages/Dashboard.tsx`
+The progress bar uses the existing `ProgressBar` component from `src/components/ui/progress-bar.tsx`.
 
-- Import `getTodayQuote` from the data file
-- Restructure the header `<motion.header>` into a flex row with the greeting on the left and the quote on the right
-- Remove the "Daily Quote" `<motion.section>` at the bottom of the page
+---
 
-The header will look roughly like:
+## 2. Increase Quote Font Size
 
-```
-Good evening                    "He who has a why to live
-Tuesday, February 10             can bear almost any how."
-                                           -- Nietzsche
-```
+Change the daily quote text from `text-xs` to `text-sm` and the author attribution from `text-[11px]` to `text-xs`. Keeps the italic, right-aligned styling -- just slightly more readable.
 
-### Quote Themes (spread across 365 entries)
+---
 
-- Stoic philosophy (Marcus Aurelius, Seneca, Epictetus) -- ~80 quotes
-- Discipline and self-mastery (Jocko Willink, David Goggins, Musashi) -- ~60 quotes
-- Personal responsibility and direction (Jordan Peterson, Viktor Frankl) -- ~50 quotes
-- Masculinity and strength (Theodore Roosevelt, Hemingway) -- ~40 quotes
-- Introspection and self-knowledge (Socrates, Lao Tzu, Emerson) -- ~50 quotes
-- Motivation and adversity (Churchill, Mandela, Aurelius) -- ~45 quotes
-- Confidence and action (Napoleon, Caesar, Patton) -- ~40 quotes
+## 3. Daily Habits -- No Changes Needed
+
+The current implementation already uses emerald for "build" habits and rose for "break" habits, with clean spacing. No modifications required.
+
+---
+
+## 4. Weight Tracker Visual Cleanup
+
+Minor styling refinements to `DailyWeightTracker.tsx`:
+- Reduce input field width slightly (`w-16` instead of `w-20`)
+- Make the separator between habits and weight more subtle (lighter border, less padding)
+- Keep the same functionality -- just less visual weight
+
+---
+
+## 5. Today's Anchors -- Remove Strategy
+
+Update the `ANCHOR_TYPES` and `ANCHOR_CONFIG` arrays to remove `"strategy"` from the anchors list on the dashboard. Keep only:
+- Morning Routine
+- Today's Training
+- Reading
+- Evening Routine
+
+No other changes to anchors section.
+
+---
+
+## 6. Remove Quick Actions Section
+
+The Quick Actions section (Morning Journal / Today's Training buttons) adds clutter since these actions are already accessible via Today's Anchors. Remove this entire section.
+
+---
+
+## Files Modified
+
+| File | Change |
+|---|---|
+| `src/pages/Dashboard.tsx` | Replace streaks with completion % + 2 streaks; remove Quick Actions; remove strategy from anchors; bump quote font size; compute daily completion % |
+| `src/components/dashboard/DailyWeightTracker.tsx` | Minor styling: smaller input, subtler appearance |
+| `src/components/dashboard/DailyHabits.tsx` | Expose completed count via a callback prop so Dashboard can compute daily completion % |
+
+---
+
+## Technical Notes
+
+- Daily completion % is computed in `Dashboard.tsx` using data already fetched (habits completions from `DailyHabits`, anchor completions from the existing `anchorCompletions` state). The `DailyHabits` component will call back with `{ total, completed }` so the parent can include habit counts in the percentage.
+- No new database tables or edge functions needed.
+- No changes to navigation, layout system, or other pages.
 
