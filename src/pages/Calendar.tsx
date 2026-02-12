@@ -344,7 +344,7 @@ export default function CalendarPage() {
                       : "bg-muted text-muted-foreground"
                   )}
                 >
-                  {selectedBlock.block_type.replace("_", " ")}
+                  {selectedBlock.block_type === "strategy" ? "Planning Ritual" : selectedBlock.block_type.replace("_", " ")}
                 </span>
                 {selectedBlock.is_locked && (
                   <span className="text-xs text-muted-foreground">

@@ -172,13 +172,13 @@ export function ReviewStep({ data }: ReviewStepProps) {
           </div>
         )}
 
-        {/* Strategy Block */}
+        {/* Sunday Planning Ritual */}
         <div className="card-ritual">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2 rounded-lg bg-amber-500/10">
               <CalendarClock className="h-4 w-4 text-amber-400" />
             </div>
-            <h3 className="font-medium">Strategy Block</h3>
+            <h3 className="font-medium">Sunday Planning Ritual</h3>
           </div>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
