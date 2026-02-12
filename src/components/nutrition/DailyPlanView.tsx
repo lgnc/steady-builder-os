@@ -19,6 +19,7 @@ interface DailyPlanViewProps {
   onToggleComplete: (date: string, slot: string, completed: boolean) => void;
   onSwapMeal: (dayIndex: number, slot: string) => void;
   onToggleFavourite: (meal: Meal) => void;
+  onCustomise?: () => void;
 }
 
 export function DailyPlanView({
@@ -31,6 +32,7 @@ export function DailyPlanView({
   onToggleComplete,
   onSwapMeal,
   onToggleFavourite,
+  onCustomise,
 }: DailyPlanViewProps) {
   const monday = startOfWeek(new Date(weekStart + "T00:00:00"), { weekStartsOn: 1 });
   const todayDayIndex = (() => {
@@ -118,6 +120,7 @@ export function DailyPlanView({
               }
               onSwap={() => onSwapMeal(selectedDay, meal.slot)}
               onToggleFavourite={() => onToggleFavourite(meal)}
+              onCustomise={onCustomise}
             />
           );
         })}

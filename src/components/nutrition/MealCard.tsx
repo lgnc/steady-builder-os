@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronUp, Heart, RefreshCw, Check, Clock, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Heart, RefreshCw, Check, Clock, Loader2, Lock } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export interface Ingredient {
@@ -30,14 +30,15 @@ interface MealCardProps {
   onToggleComplete: () => void;
   onSwap: () => void;
   onToggleFavourite: () => void;
+  onCustomise?: () => void;
 }
 
 const SLOT_LABELS: Record<string, string> = {
   breakfast: "Breakfast",
   lunch: "Lunch",
   dinner: "Dinner",
-  snack_1: "Snack",
-  snack_2: "Snack 2",
+  meal_4: "Meal 4",
+  meal_5: "Meal 5",
 };
 
 export function MealCard({
@@ -48,6 +49,7 @@ export function MealCard({
   onToggleComplete,
   onSwap,
   onToggleFavourite,
+  onCustomise,
 }: MealCardProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -102,6 +104,15 @@ export function MealCard({
               <RefreshCw className="h-4 w-4 text-muted-foreground" />
             )}
           </button>
+          {onCustomise && (
+            <button
+              onClick={onCustomise}
+              className="p-1.5 rounded-md hover:bg-muted/50 transition-colors"
+              title="Customise — Pro"
+            >
+              <Lock className="h-4 w-4 text-muted-foreground" />
+            </button>
+          )}
           <button
             onClick={() => setExpanded(!expanded)}
             className="p-1.5 rounded-md hover:bg-muted/50 transition-colors"
