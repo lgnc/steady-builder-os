@@ -11,7 +11,7 @@ import { ShoppingListSheet } from "@/components/nutrition/ShoppingListSheet";
 import { UpgradeModal } from "@/components/nutrition/UpgradeModal";
 import { Meal } from "@/components/nutrition/MealCard";
 import { cn } from "@/lib/utils";
-import { Loader2, Settings2, Sparkles } from "lucide-react";
+import { Loader2, Lock, Sparkles } from "lucide-react";
 
 type ViewTab = "daily" | "weekly";
 
@@ -256,12 +256,13 @@ export default function NutritionPage() {
           <h1 className="text-lg font-semibold tracking-tight">Nutrition</h1>
           <button
             onClick={() => {
-              setUpgradeFeature("Advanced Personalisation");
+              setUpgradeFeature("Customise Plan");
               setUpgradeOpen(true);
             }}
-            className="p-2 rounded-md hover:bg-muted/50 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
           >
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
+            <Lock className="h-3 w-3" />
+            Customise — Pro
           </button>
         </div>
 
@@ -295,6 +296,10 @@ export default function NutritionPage() {
             onToggleComplete={handleToggleComplete}
             onSwapMeal={handleSwapMeal}
             onToggleFavourite={handleToggleFavourite}
+            onCustomise={() => {
+              setUpgradeFeature("Customise Meals");
+              setUpgradeOpen(true);
+            }}
           />
         ) : (
           <WeeklyOverview

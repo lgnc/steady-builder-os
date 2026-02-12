@@ -81,8 +81,8 @@ export function NutritionSetup({
             : mealsPerDay === 3
             ? "Breakfast + Lunch + Dinner"
             : mealsPerDay === 4
-            ? "Breakfast + Lunch + Dinner + Snack"
-            : "Breakfast + Lunch + Dinner + 2 Snacks"}
+            ? "Breakfast + Lunch + Dinner + Extra Meal"
+            : "Breakfast + Lunch + Dinner + 2 Extra Meals"}
         </p>
       </div>
 
