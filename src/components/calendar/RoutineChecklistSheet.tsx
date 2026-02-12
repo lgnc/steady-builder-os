@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Check, Plus, Trash2, ChevronUp, ChevronDown, Pencil, Flame, X } from "lucide-react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import {
   Sheet,
   SheetContent,
@@ -52,6 +53,7 @@ interface RoutineChecklistSheetProps {
   onOpenChange: (open: boolean) => void;
   userId: string;
   routineType: string;
+  selectedDate?: Date;
 }
 
 export function RoutineChecklistSheet({
@@ -59,6 +61,7 @@ export function RoutineChecklistSheet({
   onOpenChange,
   userId,
   routineType,
+  selectedDate,
 }: RoutineChecklistSheetProps) {
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
@@ -69,7 +72,7 @@ export function RoutineChecklistSheet({
   const [loading, setLoading] = useState(true);
   const [journalView, setJournalView] = useState<"morning" | "evening" | null>(null);
 
-  const today = format(new Date(), "yyyy-MM-dd");
+  const today = format(selectedDate ?? new Date(), "yyyy-MM-dd");
   const completedCount = items.filter(item => completedIds.has(item.id)).length;
   const totalCount = items.length;
   const allComplete = totalCount > 0 && completedCount === totalCount;
@@ -78,7 +81,7 @@ export function RoutineChecklistSheet({
   const routineLabel = routineType === "morning_routine" 
     ? "Morning Routine" 
     : routineType === "strategy" 
-    ? "Strategy Block" 
+    ? "Sunday Planning Ritual" 
     : "Evening Routine";
 
   // Detect if an item title is a journal entry link
@@ -180,6 +183,9 @@ export function RoutineChecklistSheet({
     if (newAllComplete && !allCompleteCelebrated) {
       setAllCompleteCelebrated(true);
       await updateStreak();
+      if (routineType === "strategy") {
+        toast("Week structured, decisions made, execute the plan.");
+      }
     }
   };
 
@@ -312,6 +318,11 @@ export function RoutineChecklistSheet({
               </Button>
             </div>
           </div>
+          {routineType === "strategy" && (
+            <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+              This time block directs your masculine energy for the week. Don't miss it.
+            </p>
+          )}
         </SheetHeader>
 
         {/* Progress */}

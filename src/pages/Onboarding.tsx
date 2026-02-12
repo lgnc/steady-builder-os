@@ -554,7 +554,7 @@ export default function OnboardingPage() {
     blocks.push({
       user_id: user.id,
       block_type: "strategy",
-      title: "Strategy Block",
+      title: "Sunday Planning Ritual",
       start_time: strategyStart,
       end_time: addMinutes(strategyStart, strategyDurationMinutes),
       day_of_week: strategyDay,
@@ -612,7 +612,7 @@ export default function OnboardingPage() {
     "Sleep & Recovery",
     "Work Type",
     "Work & Time",
-    "Strategy Block",
+    "Planning Ritual",
     "Your Commutes",
     "Training Experience",
     "Select Program",

@@ -21,9 +21,9 @@ export function StrategyStep({ data, updateData }: StrategyStepProps) {
   return (
     <div className="space-y-8">
       <div className="space-y-2">
-        <h2 className="text-2xl font-semibold tracking-tight">Strategy Block</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">Sunday Planning Ritual</h2>
         <p className="text-muted-foreground">
-          Pick one day each week for a 45-minute planning session. You'll map out
+          Pick one day each week for a 45-minute planning ritual. You'll map out
           training, meals, meetings, energy management — the entire week ahead.
           Phone on Do Not Disturb, full focus.
         </p>
@@ -39,7 +39,7 @@ export function StrategyStep({ data, updateData }: StrategyStepProps) {
         </div>
 
         <div className="space-y-3">
-          <label className="text-sm font-medium">Best day for your Strategy Block</label>
+          <label className="text-sm font-medium">Best day for your Planning Ritual</label>
           <div className="flex flex-wrap gap-2">
             {daysOfWeek.map((day) => (
               <button

@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { format, startOfWeek } from "date-fns";
+import { format, startOfWeek, subDays, addDays, isToday, isBefore, startOfDay, differenceInCalendarDays } from "date-fns";
 import {
   Sun,
   Moon,
   Dumbbell,
   BookOpen,
   ChevronRight,
+  ChevronLeft,
   Flame,
   CheckCircle2,
 } from "lucide-react";
@@ -23,6 +24,7 @@ import { RoutineChecklistSheet } from "@/components/calendar/RoutineChecklistShe
 import { TrainingBlockSheet } from "@/components/calendar/TrainingBlockSheet";
 import { ReadingLogSheet } from "@/components/dashboard/ReadingLogSheet";
 import { ProgressBar } from "@/components/ui/progress-bar";
+import { toast } from "sonner";
 
 interface ScheduleBlock {
   id: string;
@@ -49,7 +51,32 @@ const ANCHOR_CONFIG: Record<string, { label: string; icon: typeof Sun }> = {
   evening_routine: { label: "Evening Routine", icon: Moon },
 };
 
+function formatDateLabel(date: Date): string {
+  const today = startOfDay(new Date());
+  const target = startOfDay(date);
+  const diff = differenceInCalendarDays(today, target);
+
+  if (diff === 0) return `Today • ${format(date, "EEE d MMM")}`;
+  if (diff === 1) return `Yesterday • ${format(date, "EEE d MMM")}`;
+  return format(date, "EEE d MMM");
+}
+
+function canEditDate(date: Date): boolean {
+  const today = startOfDay(new Date());
+  const target = startOfDay(date);
+  const diff = differenceInCalendarDays(today, target);
+  // Can edit today, yesterday, and day before (48h window)
+  return diff >= 0 && diff <= 2;
+}
+
+function isFutureDate(date: Date): boolean {
+  const today = startOfDay(new Date());
+  const target = startOfDay(date);
+  return target > today;
+}
+
 export default function DashboardPage() {
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [todayBlocks, setTodayBlocks] = useState<ScheduleBlock[]>([]);
   const [streaks, setStreaks] = useState<Streak[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -65,6 +92,11 @@ export default function DashboardPage() {
 
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  const viewingToday = isToday(selectedDate);
+  const viewingFuture = isFutureDate(selectedDate);
+  const editable = canEditDate(selectedDate);
+  const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -97,15 +129,14 @@ export default function DashboardPage() {
         return;
       }
 
-      const today = new Date().getDay();
-      const todayDate = format(new Date(), "yyyy-MM-dd");
+      const dayOfWeek = selectedDate.getDay();
 
       const [blocksRes, streaksRes] = await Promise.all([
         supabase
           .from("schedule_blocks")
           .select("*")
           .eq("user_id", user.id)
-          .eq("day_of_week", today)
+          .eq("day_of_week", dayOfWeek)
           .order("start_time"),
         supabase
           .from("streaks")
@@ -132,7 +163,7 @@ export default function DashboardPage() {
             .from("routine_checklist_completions")
             .select("checklist_item_id")
             .eq("user_id", user.id)
-            .eq("completed_date", todayDate),
+            .eq("completed_date", selectedDateStr),
         ]);
 
         const totalItems = itemsRes.data?.length ?? 0;
@@ -149,7 +180,7 @@ export default function DashboardPage() {
         .from("user_training_schedule")
         .select("completed")
         .eq("user_id", user.id)
-        .eq("day_of_week", today)
+        .eq("day_of_week", dayOfWeek)
         .eq("completed", true)
         .limit(1);
 
@@ -159,7 +190,7 @@ export default function DashboardPage() {
         .from("reading_logs")
         .select("pages_read, minutes_read")
         .eq("user_id", user.id)
-        .eq("log_date", todayDate)
+        .eq("log_date", selectedDateStr)
         .maybeSingle();
 
       completions.reading =
@@ -168,7 +199,7 @@ export default function DashboardPage() {
 
       setAnchorCompletions(completions);
 
-      // Fetch nutrition meal counts for today
+      // Fetch nutrition meal counts for selected date
       const { data: mealPlan } = await supabase
         .from("meal_plans")
         .select("id, plan_data, week_start")
@@ -180,7 +211,7 @@ export default function DashboardPage() {
 
       if (mealPlan?.plan_data) {
         const monday = startOfWeek(new Date(mealPlan.week_start + "T00:00:00"), { weekStartsOn: 1 });
-        const diff = Math.floor((new Date().getTime() - monday.getTime()) / (1000 * 60 * 60 * 24));
+        const diff = Math.floor((selectedDate.getTime() - monday.getTime()) / (1000 * 60 * 60 * 24));
         const todayDayIndex = Math.max(1, Math.min(7, diff + 1));
         const planData = mealPlan.plan_data as any;
         const todayMeals = planData?.days?.find((d: any) => d.day === todayDayIndex)?.meals || [];
@@ -192,7 +223,7 @@ export default function DashboardPage() {
             .select("meal_slot")
             .eq("user_id", user.id)
             .eq("meal_plan_id", mealPlan.id)
-            .eq("meal_date", todayDate)
+            .eq("meal_date", selectedDateStr)
             .eq("completed", true);
 
           setNutritionCounts({ total: totalMeals, completed: mealCompletions?.length ?? 0 });
@@ -205,28 +236,25 @@ export default function DashboardPage() {
     };
 
     fetchData();
-  }, [user, navigate]);
+  }, [user, navigate, selectedDate, selectedDateStr]);
 
   // Daily completion % calculation
   const getDailyCompletion = useCallback(() => {
     let total = habitCounts.total;
     let completed = habitCounts.completed;
 
-    // Training counts if scheduled today
     const hasTraining = todayBlocks.some((b) => b.block_type === "training");
     if (hasTraining) {
       total++;
       if (anchorCompletions.training) completed++;
     }
 
-    // Morning routine counts if scheduled today
     const hasMorning = todayBlocks.some((b) => b.block_type === "morning_routine");
     if (hasMorning) {
       total++;
       if (anchorCompletions.morning_routine) completed++;
     }
 
-    // Nutrition meals count
     total += nutritionCounts.total;
     completed += nutritionCounts.completed;
 
@@ -234,6 +262,15 @@ export default function DashboardPage() {
   }, [habitCounts, todayBlocks, anchorCompletions, nutritionCounts]);
 
   const handleAnchorClick = (block: ScheduleBlock) => {
+    if (viewingFuture) {
+      toast("You can't complete future tasks.");
+      return;
+    }
+    if (!editable) {
+      toast("This day is outside the editable window.");
+      return;
+    }
+
     switch (block.block_type) {
       case "morning_routine":
       case "evening_routine":
@@ -253,6 +290,9 @@ export default function DashboardPage() {
         break;
     }
   };
+
+  const goToPreviousDay = () => setSelectedDate((d) => subDays(d, 1));
+  const goToNextDay = () => setSelectedDate((d) => addDays(d, 1));
 
   const anchorBlocks = todayBlocks.filter((b) => ANCHOR_TYPES.includes(b.block_type));
   const seenTypes = new Set<string>();
@@ -281,22 +321,52 @@ export default function DashboardPage() {
         <motion.header
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-start justify-between gap-4"
+          className="space-y-1"
         >
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight">{greeting}</h1>
-            <p className="text-muted-foreground">
-              {format(currentTime, "EEEE, MMMM d")}
-            </p>
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <h1 className="text-2xl font-semibold tracking-tight">{greeting}</h1>
+            </div>
+            {viewingToday && (
+              <div className="text-right flex-1 min-w-0">
+                <p className="text-sm italic text-muted-foreground leading-relaxed">
+                  "{getTodayQuote().text}"
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  — {getTodayQuote().author}
+                </p>
+              </div>
+            )}
           </div>
-          <div className="text-right flex-1 min-w-0">
-            <p className="text-sm italic text-muted-foreground leading-relaxed">
-              "{getTodayQuote().text}"
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              — {getTodayQuote().author}
-            </p>
+
+          {/* Date navigation */}
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              onClick={goToPreviousDay}
+              className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Previous day"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="text-sm text-muted-foreground">
+              {formatDateLabel(selectedDate)}
+            </span>
+            <button
+              onClick={goToNextDay}
+              className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Next day"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
+
+          {/* Past day indicator */}
+          {!viewingToday && !viewingFuture && (
+            <p className="text-xs text-muted-foreground/60 italic">Viewing past day</p>
+          )}
+          {viewingFuture && (
+            <p className="text-xs text-muted-foreground/60 italic">Viewing future day</p>
+          )}
         </motion.header>
 
         {/* Daily Completion + Streaks */}
@@ -306,13 +376,11 @@ export default function DashboardPage() {
           transition={{ delay: 0.1 }}
           className="flex gap-3 items-stretch"
         >
-          {/* Completion % */}
           <div className="flex-[1.5] card-stat flex flex-col justify-center gap-1.5 p-3">
-            <span className="text-xs text-muted-foreground">Today: {completionPct}%</span>
+            <span className="text-xs text-muted-foreground">{viewingToday ? "Today" : format(selectedDate, "EEE")}: {completionPct}%</span>
             <ProgressBar value={completionPct} />
           </div>
 
-          {/* Training Streak */}
           <div className="flex-1 card-stat flex items-center gap-2 p-3">
             <Flame className={cn("h-4 w-4", trainingStreak > 0 ? "text-primary" : "text-muted-foreground")} />
             <div>
@@ -321,7 +389,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Morning Streak */}
           <div className="flex-1 card-stat flex items-center gap-2 p-3">
             <Flame className={cn("h-4 w-4", morningStreak > 0 ? "text-primary" : "text-muted-foreground")} />
             <div>
@@ -335,6 +402,8 @@ export default function DashboardPage() {
         {user && (
           <DailyHabits
             userId={user.id}
+            selectedDate={selectedDate}
+            editable={editable && !viewingFuture}
             onCompletionChange={setHabitCounts}
           />
         )}
@@ -346,7 +415,9 @@ export default function DashboardPage() {
           transition={{ delay: 0.3 }}
           className="space-y-3"
         >
-          <h2 className="text-sm font-medium text-muted-foreground">Today's Anchors</h2>
+          <h2 className="text-sm font-medium text-muted-foreground">
+            {viewingToday ? "Today's Anchors" : "Anchors"}
+          </h2>
 
           <div className="space-y-2">
             {uniqueAnchors.length === 0 ? (
@@ -366,7 +437,10 @@ export default function DashboardPage() {
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.4 + index * 0.05 }}
-                    className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card cursor-pointer active:scale-[0.98] transition-transform"
+                    className={cn(
+                      "flex items-center gap-3 p-3 rounded-xl border border-border bg-card cursor-pointer active:scale-[0.98] transition-transform",
+                      viewingFuture && "opacity-60"
+                    )}
                     onClick={() => handleAnchorClick(block)}
                   >
                     <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -393,6 +467,7 @@ export default function DashboardPage() {
             onOpenChange={setRoutineSheetOpen}
             userId={user.id}
             routineType={routineSheetType}
+            selectedDate={selectedDate}
           />
           <TrainingBlockSheet
             open={trainingSheetOpen}
@@ -409,6 +484,7 @@ export default function DashboardPage() {
             open={readingSheetOpen}
             onOpenChange={setReadingSheetOpen}
             userId={user.id}
+            selectedDate={selectedDate}
           />
         </>
       )}

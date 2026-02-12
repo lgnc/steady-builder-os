@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Flame, Pencil, Shield, Sparkles } from "lucide-react";
-import { format, subDays, isYesterday, isToday as isDateToday, parseISO } from "date-fns";
+import { format, subDays, isToday as isDateToday } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { HabitEditSheet } from "./HabitEditSheet";
 import { DailyWeightTracker } from "./DailyWeightTracker";
+import { toast } from "sonner";
 
 interface Habit {
   id: string;
@@ -28,18 +29,22 @@ const DEFAULT_HABITS = [
 
 interface DailyHabitsProps {
   userId: string;
+  selectedDate?: Date;
+  editable?: boolean;
   onCompletionChange?: (counts: { total: number; completed: number }) => void;
 }
 
-export function DailyHabits({ userId, onCompletionChange }: DailyHabitsProps) {
+export function DailyHabits({ userId, selectedDate, editable = true, onCompletionChange }: DailyHabitsProps) {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [editOpen, setEditOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [seeded, setSeeded] = useState(false);
 
-  const today = format(new Date(), "yyyy-MM-dd");
-  const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
+  const dateObj = selectedDate ?? new Date();
+  const dateStr = format(dateObj, "yyyy-MM-dd");
+  const yesterdayStr = format(subDays(dateObj, 1), "yyyy-MM-dd");
+  const isViewingToday = isDateToday(dateObj);
 
   const fetchHabits = useCallback(async () => {
     if (!userId) return;
@@ -56,12 +61,12 @@ export function DailyHabits({ userId, onCompletionChange }: DailyHabitsProps) {
         .from("habit_completions")
         .select("habit_id")
         .eq("user_id", userId)
-        .eq("completed_date", today),
+        .eq("completed_date", dateStr),
     ]);
 
     let fetchedHabits = (habitsRes.data ?? []) as Habit[];
 
-    // Seed defaults if no habits exist (guard against race condition)
+    // Seed defaults if no habits exist
     if (fetchedHabits.length === 0 && !seeded) {
       setSeeded(true);
       const rows = DEFAULT_HABITS.map((h) => ({ ...h, user_id: userId }));
@@ -72,23 +77,27 @@ export function DailyHabits({ userId, onCompletionChange }: DailyHabitsProps) {
       fetchedHabits = (seededData ?? []) as Habit[];
     }
 
-    // Streak decay: reset streaks for habits not completed yesterday or today
-    const decayIds: string[] = [];
-    for (const habit of fetchedHabits) {
-      if (habit.current_streak > 0 && habit.last_completed_date) {
-        const lastDate = habit.last_completed_date;
-        if (lastDate !== today && lastDate !== yesterday) {
-          decayIds.push(habit.id);
-          habit.current_streak = 0;
+    // Streak decay only when viewing today
+    if (isViewingToday) {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
+      const decayIds: string[] = [];
+      for (const habit of fetchedHabits) {
+        if (habit.current_streak > 0 && habit.last_completed_date) {
+          const lastDate = habit.last_completed_date;
+          if (lastDate !== today && lastDate !== yesterday) {
+            decayIds.push(habit.id);
+            habit.current_streak = 0;
+          }
         }
       }
-    }
 
-    if (decayIds.length > 0) {
-      await supabase
-        .from("habits")
-        .update({ current_streak: 0 })
-        .in("id", decayIds);
+      if (decayIds.length > 0) {
+        await supabase
+          .from("habits")
+          .update({ current_streak: 0 })
+          .in("id", decayIds);
+      }
     }
 
     setHabits(fetchedHabits);
@@ -96,7 +105,7 @@ export function DailyHabits({ userId, onCompletionChange }: DailyHabitsProps) {
       setCompletedIds(new Set(completionsRes.data.map((c: any) => c.habit_id)));
     }
     setLoading(false);
-  }, [userId, today, yesterday]);
+  }, [userId, dateStr, isViewingToday]);
 
   useEffect(() => {
     fetchHabits();
@@ -110,6 +119,11 @@ export function DailyHabits({ userId, onCompletionChange }: DailyHabitsProps) {
   }, [habits.length, completedIds.size, loading]);
 
   const toggleHabit = async (habit: Habit) => {
+    if (!editable) {
+      toast("You can't complete future tasks.");
+      return;
+    }
+
     const isCompleted = completedIds.has(habit.id);
 
     // Optimistic update
@@ -119,21 +133,19 @@ export function DailyHabits({ userId, onCompletionChange }: DailyHabitsProps) {
     if (habitIndex < 0) return;
 
     if (isCompleted) {
-      // Uncheck
       newCompleted.delete(habit.id);
       const newStreak = Math.max(0, habit.current_streak - 1);
       updatedHabits[habitIndex] = {
         ...habit,
         current_streak: newStreak,
-        last_completed_date: newStreak > 0 ? yesterday : null,
+        last_completed_date: newStreak > 0 ? yesterdayStr : null,
       };
     } else {
-      // Check
       newCompleted.add(habit.id);
       let newStreak: number;
-      if (habit.last_completed_date === today) {
+      if (habit.last_completed_date === dateStr) {
         newStreak = habit.current_streak;
-      } else if (habit.last_completed_date === yesterday) {
+      } else if (habit.last_completed_date === yesterdayStr) {
         newStreak = habit.current_streak + 1;
       } else {
         newStreak = 1;
@@ -143,7 +155,7 @@ export function DailyHabits({ userId, onCompletionChange }: DailyHabitsProps) {
         ...habit,
         current_streak: newStreak,
         longest_streak: newLongest,
-        last_completed_date: today,
+        last_completed_date: dateStr,
       };
     }
 
@@ -152,7 +164,6 @@ export function DailyHabits({ userId, onCompletionChange }: DailyHabitsProps) {
 
     // Persist
     if (isCompleted) {
-      // Uncheck: delete completion + revert streak
       const newStreak = Math.max(0, habit.current_streak - 1);
       await Promise.all([
         supabase
@@ -160,21 +171,20 @@ export function DailyHabits({ userId, onCompletionChange }: DailyHabitsProps) {
           .delete()
           .eq("user_id", userId)
           .eq("habit_id", habit.id)
-          .eq("completed_date", today),
+          .eq("completed_date", dateStr),
         supabase
           .from("habits")
           .update({
             current_streak: newStreak,
-            last_completed_date: newStreak > 0 ? yesterday : null,
+            last_completed_date: newStreak > 0 ? yesterdayStr : null,
           })
           .eq("id", habit.id),
       ]);
     } else {
-      // Check: insert completion + update streak
       let newStreak: number;
-      if (habit.last_completed_date === today) {
+      if (habit.last_completed_date === dateStr) {
         newStreak = habit.current_streak;
-      } else if (habit.last_completed_date === yesterday) {
+      } else if (habit.last_completed_date === yesterdayStr) {
         newStreak = habit.current_streak + 1;
       } else {
         newStreak = 1;
@@ -185,14 +195,14 @@ export function DailyHabits({ userId, onCompletionChange }: DailyHabitsProps) {
         supabase.from("habit_completions").insert({
           user_id: userId,
           habit_id: habit.id,
-          completed_date: today,
+          completed_date: dateStr,
         }),
         supabase
           .from("habits")
           .update({
             current_streak: newStreak,
             longest_streak: newLongest,
-            last_completed_date: today,
+            last_completed_date: dateStr,
           })
           .eq("id", habit.id),
       ]);
@@ -262,6 +272,7 @@ export function DailyHabits({ userId, onCompletionChange }: DailyHabitsProps) {
                       checked={checked}
                       onCheckedChange={() => toggleHabit(habit)}
                       className={cn("h-5 w-5", checkboxAccent)}
+                      disabled={!editable}
                     />
 
                     <div className="flex items-center gap-1.5 flex-1 min-w-0">
@@ -278,7 +289,6 @@ export function DailyHabits({ userId, onCompletionChange }: DailyHabitsProps) {
                       </span>
                     </div>
 
-                    {/* Streak badge */}
                     <motion.div
                       key={`streak-${habit.id}-${habit.current_streak}`}
                       initial={{ scale: 0.8, opacity: 0.5 }}
@@ -297,7 +307,7 @@ export function DailyHabits({ userId, onCompletionChange }: DailyHabitsProps) {
             </AnimatePresence>
           )}
           <div className="border-t border-border/50 mt-1 pt-1">
-            <DailyWeightTracker userId={userId} />
+            <DailyWeightTracker userId={userId} selectedDate={selectedDate} editable={editable} />
           </div>
         </div>
       </motion.section>

@@ -17,15 +17,16 @@ interface ReadingLogSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userId: string;
+  selectedDate?: Date;
 }
 
-export function ReadingLogSheet({ open, onOpenChange, userId }: ReadingLogSheetProps) {
+export function ReadingLogSheet({ open, onOpenChange, userId, selectedDate }: ReadingLogSheetProps) {
   const [pagesRead, setPagesRead] = useState(0);
   const [minutesRead, setMinutesRead] = useState(0);
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
-  const today = format(new Date(), "yyyy-MM-dd");
+  const dateStr = format(selectedDate ?? new Date(), "yyyy-MM-dd");
 
   useEffect(() => {
     if (!open) {
@@ -33,12 +34,12 @@ export function ReadingLogSheet({ open, onOpenChange, userId }: ReadingLogSheetP
       return;
     }
 
-    const fetchToday = async () => {
+    const fetchData = async () => {
       const { data } = await supabase
         .from("reading_logs")
         .select("pages_read, minutes_read")
         .eq("user_id", userId)
-        .eq("log_date", today)
+        .eq("log_date", dateStr)
         .maybeSingle();
 
       if (data) {
@@ -51,8 +52,8 @@ export function ReadingLogSheet({ open, onOpenChange, userId }: ReadingLogSheetP
       setLoaded(true);
     };
 
-    fetchToday();
-  }, [open, userId, today]);
+    fetchData();
+  }, [open, userId, dateStr]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -61,7 +62,7 @@ export function ReadingLogSheet({ open, onOpenChange, userId }: ReadingLogSheetP
       .upsert(
         {
           user_id: userId,
-          log_date: today,
+          log_date: dateStr,
           pages_read: pagesRead,
           minutes_read: minutesRead,
         },
@@ -83,7 +84,7 @@ export function ReadingLogSheet({ open, onOpenChange, userId }: ReadingLogSheetP
         <SheetHeader className="text-left">
           <SheetTitle className="flex items-center gap-2">
             <BookOpen className="h-5 w-5 text-primary" />
-            Log Today's Reading
+            Log Reading
           </SheetTitle>
         </SheetHeader>
 
