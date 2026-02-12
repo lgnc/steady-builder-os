@@ -640,24 +640,30 @@ export type Database = {
           day_number: number
           focus: string
           id: string
+          mobility_items: Json
           name: string
           program_key: string
+          warmup_items: Json
         }
         Insert: {
           created_at?: string
           day_number: number
           focus: string
           id?: string
+          mobility_items?: Json
           name: string
           program_key: string
+          warmup_items?: Json
         }
         Update: {
           created_at?: string
           day_number?: number
           focus?: string
           id?: string
+          mobility_items?: Json
           name?: string
           program_key?: string
+          warmup_items?: Json
         }
         Relationships: []
       }
@@ -665,6 +671,7 @@ export type Database = {
         Row: {
           created_at: string
           exercise_order: number
+          form_cues: string[]
           id: string
           name: string
           notes: string | null
@@ -679,6 +686,7 @@ export type Database = {
         Insert: {
           created_at?: string
           exercise_order: number
+          form_cues?: string[]
           id?: string
           name: string
           notes?: string | null
@@ -693,6 +701,7 @@ export type Database = {
         Update: {
           created_at?: string
           exercise_order?: number
+          form_cues?: string[]
           id?: string
           name?: string
           notes?: string | null
