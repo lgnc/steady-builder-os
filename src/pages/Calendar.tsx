@@ -391,7 +391,7 @@ export default function CalendarPage() {
             </div>
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-sm bg-amber-500/40" />
-              <span>Strategy</span>
+              <span>Planning</span>
             </div>
             <span className="mx-2">•</span>
             <span>Long press to drag</span>

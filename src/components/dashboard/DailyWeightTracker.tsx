@@ -6,26 +6,32 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface DailyWeightTrackerProps {
   userId: string;
+  selectedDate?: Date;
+  editable?: boolean;
 }
 
-export function DailyWeightTracker({ userId }: DailyWeightTrackerProps) {
+export function DailyWeightTracker({ userId, selectedDate, editable = true }: DailyWeightTrackerProps) {
   const [weight, setWeight] = useState("");
   const [savedWeight, setSavedWeight] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const today = format(new Date(), "yyyy-MM-dd");
+  const dateStr = format(selectedDate ?? new Date(), "yyyy-MM-dd");
 
   useEffect(() => {
     const fetch = async () => {
+      setSavedWeight(null);
+      setWeight("");
+      setEditing(false);
       const { data } = await supabase
         .from("daily_weights")
         .select("weight_kg")
         .eq("user_id", userId)
-        .eq("log_date", today)
+        .eq("log_date", dateStr)
         .maybeSingle();
 
       if (data) {
@@ -34,9 +40,13 @@ export function DailyWeightTracker({ userId }: DailyWeightTrackerProps) {
       }
     };
     fetch();
-  }, [userId, today]);
+  }, [userId, dateStr]);
 
   const handleSave = async () => {
+    if (!editable) {
+      toast("You can't complete future tasks.");
+      return;
+    }
     const val = parseFloat(weight);
     if (isNaN(val) || val < 20 || val > 300) return;
 
@@ -44,7 +54,7 @@ export function DailyWeightTracker({ userId }: DailyWeightTrackerProps) {
     const { error } = await supabase
       .from("daily_weights")
       .upsert(
-        { user_id: userId, log_date: today, weight_kg: val },
+        { user_id: userId, log_date: dateStr, weight_kg: val },
         { onConflict: "user_id,log_date" }
       );
 
@@ -55,7 +65,7 @@ export function DailyWeightTracker({ userId }: DailyWeightTrackerProps) {
     setSaving(false);
   };
 
-  const showInput = savedWeight === null || editing;
+  const showInput = (savedWeight === null || editing) && editable;
 
   return (
     <motion.div
@@ -93,12 +103,12 @@ export function DailyWeightTracker({ userId }: DailyWeightTrackerProps) {
         </div>
       ) : (
         <div
-          className="flex items-center gap-1.5 flex-1 cursor-pointer"
-          onClick={() => setEditing(true)}
+          className={cn("flex items-center gap-1.5 flex-1", editable && "cursor-pointer")}
+          onClick={() => editable && setEditing(true)}
         >
           <span className="text-sm">Weight</span>
           <span className="text-sm font-medium text-primary ml-auto">
-            {savedWeight} kg
+            {savedWeight !== null ? `${savedWeight} kg` : "—"}
           </span>
         </div>
       )}
