@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { User, LogOut, Calendar, Target, Dumbbell, Moon, ChevronRight } from "lucide-react";
+import { User, LogOut, Calendar, Dumbbell, Moon } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { WeeklyPerformanceCard, type WeeklyData } from "@/components/profile/WeeklyPerformanceCard";
 import { WeeklyReviewModal } from "@/components/profile/WeeklyReviewModal";
 import { Day28ReviewModal } from "@/components/profile/Day28ReviewModal";
+import { Day28ReviewCard } from "@/components/profile/Day28ReviewCard";
+import { Day28ResultsModal } from "@/components/profile/Day28ResultsModal";
 import { useDay28Review } from "@/hooks/useDay28Review";
 
 interface OnboardingData {
@@ -39,6 +41,7 @@ export default function ProfilePage() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [weeklyData, setWeeklyData] = useState<WeeklyData | null>(null);
   const [day28Open, setDay28Open] = useState(false);
+  const [day28ResultsOpen, setDay28ResultsOpen] = useState(false);
   
   const { user, signOut, loading: authLoading } = useAuth();
   const day28 = useDay28Review(user?.id);
@@ -163,26 +166,12 @@ export default function ProfilePage() {
           data={weeklyData}
         />
 
-        {/* Day 28 Reminder Card */}
-        {day28.reviewIncomplete && !day28.shouldShow && (
-          <motion.section
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="card-ritual cursor-pointer"
-            onClick={() => setDay28Open(true)}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Calendar className="h-5 w-5 text-primary" />
-                <div>
-                  <h3 className="font-medium text-sm">Day 28 Review incomplete</h3>
-                  <p className="text-xs text-muted-foreground">Finish your review</p>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </div>
-          </motion.section>
-        )}
+        {/* 28-Day Review Card */}
+        <Day28ReviewCard
+          day28={day28}
+          onOpenReview={() => setDay28Open(true)}
+          onOpenResults={() => setDay28ResultsOpen(true)}
+        />
 
         {/* Actions */}
         <motion.section
@@ -223,6 +212,11 @@ export default function ProfilePage() {
           onDismiss={day28.dismiss}
         />
       )}
+      <Day28ResultsModal
+        open={day28ResultsOpen}
+        onOpenChange={setDay28ResultsOpen}
+        data={day28.savedReview}
+      />
     </MobileLayout>
   );
 }
