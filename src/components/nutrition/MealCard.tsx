@@ -8,6 +8,8 @@ export interface Ingredient {
   amount_grams: number;
   raw_or_cooked: "raw" | "cooked";
   category: string;
+  display_quantity?: number;
+  display_unit?: string;
 }
 
 export interface Meal {
@@ -142,8 +144,10 @@ export function MealCard({
                 <li key={i} className="text-sm text-muted-foreground flex justify-between">
                   <span>{ing.name}</span>
                   <span className="text-xs">
-                    {ing.amount_grams}g{" "}
-                    <span className="text-muted-foreground/60">({ing.raw_or_cooked})</span>
+                    {ing.display_unit && ing.display_unit !== "g"
+                      ? `${ing.display_quantity} ${ing.display_unit}`
+                      : <>{ing.amount_grams}g{" "}<span className="text-muted-foreground/60">({ing.raw_or_cooked})</span></>
+                    }
                   </span>
                 </li>
               ))}

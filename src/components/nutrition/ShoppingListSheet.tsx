@@ -15,6 +15,8 @@ interface AggregatedItem {
   rawOrCooked: string;
   category: string;
   checked: boolean;
+  displayUnit?: string;
+  gramsPerUnit?: number;
 }
 
 const CATEGORY_ORDER = ["protein", "vegetables", "grains", "dairy", "fats", "other"];
@@ -48,6 +50,10 @@ export function ShoppingListSheet({ open, onOpenChange, planData }: ShoppingList
               rawOrCooked: ing.raw_or_cooked,
               category: ing.category || "other",
               checked: false,
+              displayUnit: ing.display_unit,
+              gramsPerUnit: ing.display_unit && ing.display_unit !== "g" && ing.display_quantity
+                ? ing.amount_grams / ing.display_quantity
+                : undefined,
             });
           }
         }
@@ -109,7 +115,9 @@ export function ShoppingListSheet({ open, onOpenChange, planData }: ShoppingList
                         {item.name}
                       </span>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {Math.round(item.totalGrams)}g ({item.rawOrCooked})
+                        {item.displayUnit && item.displayUnit !== "g" && item.gramsPerUnit
+                          ? `${Math.max(0.5, Math.round((item.totalGrams / item.gramsPerUnit) * 2) / 2)} ${item.displayUnit}`
+                          : `${Math.round(item.totalGrams)}g (${item.rawOrCooked})`}
                       </span>
                     </div>
                   );
