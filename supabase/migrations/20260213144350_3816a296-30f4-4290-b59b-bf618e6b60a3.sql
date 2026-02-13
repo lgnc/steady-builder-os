@@ -1,0 +1,1 @@
+ALTER TABLE workout_logs ADD COLUMN duration_seconds integer;
