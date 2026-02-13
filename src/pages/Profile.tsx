@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { User, LogOut, Calendar, Target, Dumbbell, Moon } from "lucide-react";
@@ -7,7 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { WeeklyPerformanceCard, type WeeklyData } from "@/components/profile/WeeklyPerformanceCard";
+import { WeeklyReviewModal } from "@/components/profile/WeeklyReviewModal";
 
 interface OnboardingData {
   wake_time: string;
@@ -33,6 +34,8 @@ const experienceLabels: Record<string, string> = {
 
 export default function ProfilePage() {
   const [onboardingData, setOnboardingData] = useState<OnboardingData | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [weeklyData, setWeeklyData] = useState<WeeklyData | null>(null);
   
   const { user, signOut, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -140,6 +143,21 @@ export default function ProfilePage() {
             You're locked into your current structure. No program hopping. Trust the process.
           </p>
         </motion.section>
+
+        {/* Weekly Performance */}
+        {user && (
+          <WeeklyPerformanceCard
+            userId={user.id}
+            onOpenReview={() => setReviewOpen(true)}
+            onDataLoaded={setWeeklyData}
+          />
+        )}
+
+        <WeeklyReviewModal
+          open={reviewOpen}
+          onOpenChange={setReviewOpen}
+          data={weeklyData}
+        />
 
         {/* Actions */}
         <motion.section
