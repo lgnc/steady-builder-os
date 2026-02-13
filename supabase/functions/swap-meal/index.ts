@@ -130,6 +130,27 @@ const RECIPE_LIBRARY: Recipe[] = [
   },
 ];
 
+// ── Unit display mapping ────────────────────────────────────────────
+
+const UNIT_MAP: { match: string; unit: string; gramsPerUnit: number }[] = [
+  { match: "egg", unit: "eggs", gramsPerUnit: 60 },
+  { match: "whey protein", unit: "scoops", gramsPerUnit: 30 },
+  { match: "banana", unit: "banana", gramsPerUnit: 120 },
+  { match: "coconut oil spray", unit: "spray", gramsPerUnit: 5 },
+];
+
+function toDisplayUnits(name: string, grams: number): { display_quantity: number; display_unit: string } {
+  const lower = name.toLowerCase();
+  for (const entry of UNIT_MAP) {
+    if (lower.includes(entry.match)) {
+      const raw = grams / entry.gramsPerUnit;
+      const rounded = Math.max(0.5, Math.round(raw * 2) / 2);
+      return { display_quantity: rounded, display_unit: entry.unit };
+    }
+  }
+  return { display_quantity: Math.round(grams), display_unit: "g" };
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────
 
 function filterRecipes(recipes: Recipe[], dietaryFilters: string[], allergyText: string): Recipe[] {
@@ -192,7 +213,8 @@ function scaleRecipe(recipe: Recipe, targetProtein: number, targetCarbs: number)
     let grams = ing.amount_grams;
     if (ing.scalable === "protein") grams = Math.round(grams * proteinScale);
     else if (ing.scalable === "carb") grams = Math.round(grams * carbScale);
-    return { name: ing.name, amount_grams: grams, raw_or_cooked: ing.raw_or_cooked, category: ing.category };
+    const { display_quantity, display_unit } = toDisplayUnits(ing.name, grams);
+    return { name: ing.name, amount_grams: grams, raw_or_cooked: ing.raw_or_cooked, category: ing.category, display_quantity, display_unit };
   });
 
   let p = 0, c = 0, f = 0;
