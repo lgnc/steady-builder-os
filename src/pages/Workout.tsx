@@ -55,16 +55,41 @@ interface WorkoutLog {
   set_number: number;
   weight_kg: number | null;
   reps_completed: number | null;
+  duration_seconds?: number | null;
   week_number: number;
 }
 
 interface SetInput {
   weight: string;
   reps: string;
+  duration: string;
   saved: boolean;
 }
 
 type PBType = "weight" | "reps" | "volume";
+
+// --- Prescription type helpers ---
+
+const getPrescriptionType = (reps: string): "duration" | "reps" => {
+  const lower = reps.toLowerCase();
+  if (lower.includes("sec") || lower.includes("min")) return "duration";
+  return "reps";
+};
+
+const parsePrescribedSeconds = (reps: string): number | null => {
+  const lower = reps.toLowerCase();
+  // Match patterns like "30 sec", "45-60 sec", "2 min", "1-2 min"
+  const secMatch = lower.match(/(\d+)[\s-]*sec/);
+  const rangeSecMatch = lower.match(/(\d+)\s*-\s*(\d+)\s*sec/);
+  const minMatch = lower.match(/(\d+)[\s-]*min/);
+  const rangeMinMatch = lower.match(/(\d+)\s*-\s*(\d+)\s*min/);
+
+  if (rangeSecMatch) return parseInt(rangeSecMatch[2], 10);
+  if (secMatch) return parseInt(secMatch[1], 10);
+  if (rangeMinMatch) return parseInt(rangeMinMatch[2], 10) * 60;
+  if (minMatch) return parseInt(minMatch[1], 10) * 60;
+  return null;
+};
 
 export default function WorkoutPage() {
   const { trainingDayId } = useParams<{ trainingDayId: string }>();
@@ -150,7 +175,6 @@ export default function WorkoutPage() {
           warmup_items: Array.isArray(day.warmup_items) ? day.warmup_items : [],
           mobility_items: Array.isArray(day.mobility_items) ? day.mobility_items : [],
         });
-        // If no warmup items, auto-unlock
         const items = Array.isArray(day.warmup_items) ? day.warmup_items : [];
         if (items.length === 0 || items.flatMap((s: any) => s.items || []).length === 0) {
           setWarmupComplete(true);
@@ -190,12 +214,14 @@ export default function WorkoutPage() {
           const existingLogs = (currentLogsRes.data || []).filter(
             (l: WorkoutLog) => l.exercise_id === ex.id
           );
+          const isDuration = getPrescriptionType(ex.reps) === "duration";
 
           inputs[ex.id] = Array.from({ length: setCount }, (_, i) => {
             const log = existingLogs.find((l: WorkoutLog) => l.set_number === i + 1);
             return {
               weight: log?.weight_kg?.toString() || "",
               reps: log?.reps_completed?.toString() || "",
+              duration: isDuration ? (log?.duration_seconds?.toString() || "") : "",
               saved: !!log,
             };
           });
@@ -239,11 +265,9 @@ export default function WorkoutPage() {
     );
     const pbs: PBType[] = [];
 
-    // Weight PB
     const maxWeight = Math.max(0, ...historicalForExercise.map((l) => l.weight_kg || 0));
     if (weight > maxWeight) pbs.push("weight");
 
-    // Reps PB at same weight
     const sameWeightLogs = historicalForExercise.filter((l) => l.weight_kg === weight);
     const maxRepsAtWeight = Math.max(0, ...sameWeightLogs.map((l) => l.reps_completed || 0));
     if (reps > maxRepsAtWeight && !pbs.includes("weight")) pbs.push("reps");
@@ -251,7 +275,7 @@ export default function WorkoutPage() {
     return pbs;
   };
 
-  const updateSetInput = (exerciseId: string, setIndex: number, field: "weight" | "reps", value: string) => {
+  const updateSetInput = (exerciseId: string, setIndex: number, field: "weight" | "reps" | "duration", value: string) => {
     setSetInputs((prev) => {
       const updated = { ...prev };
       const sets = [...(updated[exerciseId] || [])];
@@ -267,8 +291,13 @@ export default function WorkoutPage() {
     const input = setInputs[exerciseId]?.[setIndex];
     if (!input) return;
 
-    const weightKg = input.weight ? parseFloat(input.weight) : null;
-    const repsCompleted = input.reps ? parseInt(input.reps, 10) : null;
+    // Find the exercise to check prescription type
+    const exercise = exercises.find((ex) => ex.id === exerciseId);
+    const isDuration = exercise ? getPrescriptionType(exercise.reps) === "duration" : false;
+
+    const weightKg = isDuration ? null : (input.weight ? parseFloat(input.weight) : null);
+    const repsCompleted = isDuration ? null : (input.reps ? parseInt(input.reps, 10) : null);
+    const durationSeconds = isDuration ? (input.duration ? parseInt(input.duration, 10) : null) : null;
 
     const existingLog = currentLogs.find(
       (l) => l.exercise_id === exerciseId && l.set_number === setIndex + 1
@@ -277,7 +306,11 @@ export default function WorkoutPage() {
     if (existingLog) {
       await supabase
         .from("workout_logs")
-        .update({ weight_kg: weightKg, reps_completed: repsCompleted })
+        .update({ 
+          weight_kg: weightKg, 
+          reps_completed: repsCompleted,
+          duration_seconds: durationSeconds,
+        } as any)
         .eq("id", existingLog.id);
     } else {
       const { data } = await supabase
@@ -290,17 +323,18 @@ export default function WorkoutPage() {
           set_number: setIndex + 1,
           weight_kg: weightKg,
           reps_completed: repsCompleted,
-        })
+          duration_seconds: durationSeconds,
+        } as any)
         .select()
         .single();
 
       if (data) {
-        setCurrentLogs((prev) => [...prev, data]);
+        setCurrentLogs((prev) => [...prev, data as any]);
       }
     }
 
-    // Detect PBs
-    if (weightKg && repsCompleted) {
+    // Detect PBs only for reps-based exercises
+    if (!isDuration && weightKg && repsCompleted) {
       const pbs = detectPBs(exerciseId, weightKg, repsCompleted);
       if (pbs.length > 0) {
         const key = `${exerciseId}-${setIndex}`;
@@ -321,12 +355,16 @@ export default function WorkoutPage() {
   const computeSummaryData = async () => {
     if (!user) return;
 
-    // Calculate total volume for this session
     let totalVolume = 0;
     const improvements: SummaryData["improvements"] = [];
 
     for (const exercise of exercises) {
+      const isDuration = getPrescriptionType(exercise.reps) === "duration";
       const sets = setInputs[exercise.id] || [];
+      
+      // Duration exercises contribute 0 volume
+      if (isDuration) continue;
+
       let exerciseVolume = 0;
       sets.forEach((s) => {
         const w = parseFloat(s.weight) || 0;
@@ -335,7 +373,6 @@ export default function WorkoutPage() {
       });
       totalVolume += exerciseVolume;
 
-      // Compare vs previous session
       const prevSets = previousLogs.filter((l) => l.exercise_id === exercise.id);
       const prevVolume = prevSets.reduce(
         (sum, l) => sum + (l.weight_kg || 0) * (l.reps_completed || 0),
@@ -350,7 +387,6 @@ export default function WorkoutPage() {
           detail: `+${delta.toLocaleString()} kg volume`,
         });
       } else {
-        // Check max weight improvement
         const currentMaxWeight = Math.max(0, ...sets.map((s) => parseFloat(s.weight) || 0));
         const prevMaxWeight = Math.max(0, ...prevSets.map((l) => l.weight_kg || 0));
         if (currentMaxWeight > prevMaxWeight && prevMaxWeight > 0) {
@@ -363,13 +399,11 @@ export default function WorkoutPage() {
       }
     }
 
-    // Previous session total volume
     const prevTotalVolume = previousLogs.reduce(
       (sum, l) => sum + (l.weight_kg || 0) * (l.reps_completed || 0),
       0
     );
 
-    // Weekly consistency
     const { data: weekSchedule } = await supabase
       .from("user_training_schedule")
       .select("completed")
@@ -395,9 +429,16 @@ export default function WorkoutPage() {
     try {
       // Save all unsaved sets
       for (const [exerciseId, sets] of Object.entries(setInputs)) {
+        const exercise = exercises.find((ex) => ex.id === exerciseId);
+        const isDuration = exercise ? getPrescriptionType(exercise.reps) === "duration" : false;
+        
         for (let i = 0; i < sets.length; i++) {
-          if (!sets[i].saved && (sets[i].weight || sets[i].reps)) {
-            await saveSet(exerciseId, i);
+          if (!sets[i].saved) {
+            if (isDuration && sets[i].duration) {
+              await saveSet(exerciseId, i);
+            } else if (!isDuration && (sets[i].weight || sets[i].reps)) {
+              await saveSet(exerciseId, i);
+            }
           }
         }
       }
@@ -436,7 +477,6 @@ export default function WorkoutPage() {
 
       setWorkoutCompleted(true);
 
-      // Compute and show summary
       await computeSummaryData();
       setShowSummary(true);
 
@@ -455,9 +495,11 @@ export default function WorkoutPage() {
     }
   };
 
-  const allSetsLogged = Object.entries(setInputs).every(([, sets]) =>
-    sets.every((s) => s.weight && s.reps)
-  );
+  const allSetsLogged = Object.entries(setInputs).every(([exerciseId, sets]) => {
+    const exercise = exercises.find((ex) => ex.id === exerciseId);
+    const isDuration = exercise ? getPrescriptionType(exercise.reps) === "duration" : false;
+    return sets.every((s) => isDuration ? !!s.duration : (!!s.weight && !!s.reps));
+  });
 
   const isLocked = !warmupComplete && !workoutCompleted;
 
@@ -520,6 +562,8 @@ export default function WorkoutPage() {
               const sets = setInputs[exercise.id] || [];
               const isExpanded = expandedExercise === exercise.id;
               const completedSets = sets.filter((s) => s.saved).length;
+              const isDuration = getPrescriptionType(exercise.reps) === "duration";
+              const prescribedSeconds = isDuration ? parsePrescribedSeconds(exercise.reps) : null;
 
               return (
                 <motion.div
@@ -589,13 +633,21 @@ export default function WorkoutPage() {
                       {/* Form Cues */}
                       <ExerciseFormCues cues={exercise.form_cues} />
 
-                      {/* Set Header */}
-                      <div className="grid grid-cols-[40px_1fr_1fr_60px] gap-2 text-xs text-muted-foreground font-medium">
-                        <span>Set</span>
-                        <span>Weight (kg)</span>
-                        <span>Reps</span>
-                        <span className="text-center">Prev</span>
-                      </div>
+                      {/* Set Header - conditional columns */}
+                      {isDuration ? (
+                        <div className="grid grid-cols-[40px_1fr_60px] gap-2 text-xs text-muted-foreground font-medium">
+                          <span>Set</span>
+                          <span>Time (sec)</span>
+                          <span className="text-center">Prev</span>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-[40px_1fr_1fr_60px] gap-2 text-xs text-muted-foreground font-medium">
+                          <span>Set</span>
+                          <span>Weight (kg)</span>
+                          <span>Reps</span>
+                          <span className="text-center">Prev</span>
+                        </div>
+                      )}
 
                       {/* Set Rows */}
                       {sets.map((setInput, setIdx) => {
@@ -605,71 +657,123 @@ export default function WorkoutPage() {
 
                         return (
                           <div key={setIdx} className="space-y-1">
-                            <div
-                              className={cn(
-                                "grid grid-cols-[40px_1fr_1fr_60px] gap-2 items-center",
-                                setInput.saved && "opacity-70"
-                              )}
-                            >
-                              <span
+                            {isDuration ? (
+                              /* Duration-based row */
+                              <div
                                 className={cn(
-                                  "text-sm font-medium text-center",
-                                  setInput.saved
-                                    ? "text-primary"
-                                    : "text-muted-foreground"
+                                  "grid grid-cols-[40px_1fr_60px] gap-2 items-center",
+                                  setInput.saved && "opacity-70"
                                 )}
                               >
-                                {setInput.saved ? (
-                                  <Check className="h-4 w-4 mx-auto" />
-                                ) : (
-                                  setIdx + 1
-                                )}
-                              </span>
-                              <Input
-                                type="number"
-                                inputMode="decimal"
-                                placeholder="0"
-                                value={setInput.weight}
-                                onChange={(e) =>
-                                  updateSetInput(exercise.id, setIdx, "weight", e.target.value)
-                                }
-                                onBlur={() => {
-                                  if (setInput.weight && setInput.reps) {
-                                    saveSet(exercise.id, setIdx);
+                                <span
+                                  className={cn(
+                                    "text-sm font-medium text-center",
+                                    setInput.saved ? "text-primary" : "text-muted-foreground"
+                                  )}
+                                >
+                                  {setInput.saved ? (
+                                    <Check className="h-4 w-4 mx-auto" />
+                                  ) : (
+                                    setIdx + 1
+                                  )}
+                                </span>
+                                <Input
+                                  type="number"
+                                  inputMode="numeric"
+                                  placeholder={prescribedSeconds?.toString() || "0"}
+                                  value={setInput.duration}
+                                  onChange={(e) =>
+                                    updateSetInput(exercise.id, setIdx, "duration", e.target.value)
                                   }
-                                }}
-                                className="h-9 text-sm"
-                                disabled={isLocked || workoutCompleted}
-                              />
-                              <Input
-                                type="number"
-                                inputMode="numeric"
-                                placeholder="0"
-                                value={setInput.reps}
-                                onChange={(e) =>
-                                  updateSetInput(exercise.id, setIdx, "reps", e.target.value)
-                                }
-                                onBlur={() => {
-                                  if (setInput.weight && setInput.reps) {
-                                    saveSet(exercise.id, setIdx);
-                                  }
-                                }}
-                                className="h-9 text-sm"
-                                disabled={isLocked || workoutCompleted}
-                              />
-                              <div className="text-center">
-                                {prevLog ? (
-                                  <span className="text-[10px] text-muted-foreground flex items-center justify-center gap-0.5">
-                                    <TrendingUp className="h-3 w-3" />
-                                    {prevLog.weight_kg}×{prevLog.reps_completed}
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] text-muted-foreground">—</span>
-                                )}
+                                  onBlur={() => {
+                                    if (setInput.duration) {
+                                      saveSet(exercise.id, setIdx);
+                                    }
+                                  }}
+                                  className="h-9 text-sm"
+                                  disabled={isLocked || workoutCompleted}
+                                />
+                                <div className="text-center">
+                                  {prevLog?.duration_seconds ? (
+                                    <span className="text-[10px] text-muted-foreground flex items-center justify-center gap-0.5">
+                                      <Clock className="h-3 w-3" />
+                                      {prevLog.duration_seconds}s
+                                    </span>
+                                  ) : prevLog ? (
+                                    <span className="text-[10px] text-muted-foreground">—</span>
+                                  ) : (
+                                    <span className="text-[10px] text-muted-foreground">—</span>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                            {/* PB Indicators */}
-                            {pbs.length > 0 && (
+                            ) : (
+                              /* Reps-based row (unchanged) */
+                              <div
+                                className={cn(
+                                  "grid grid-cols-[40px_1fr_1fr_60px] gap-2 items-center",
+                                  setInput.saved && "opacity-70"
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    "text-sm font-medium text-center",
+                                    setInput.saved
+                                      ? "text-primary"
+                                      : "text-muted-foreground"
+                                  )}
+                                >
+                                  {setInput.saved ? (
+                                    <Check className="h-4 w-4 mx-auto" />
+                                  ) : (
+                                    setIdx + 1
+                                  )}
+                                </span>
+                                <Input
+                                  type="number"
+                                  inputMode="decimal"
+                                  placeholder="0"
+                                  value={setInput.weight}
+                                  onChange={(e) =>
+                                    updateSetInput(exercise.id, setIdx, "weight", e.target.value)
+                                  }
+                                  onBlur={() => {
+                                    if (setInput.weight && setInput.reps) {
+                                      saveSet(exercise.id, setIdx);
+                                    }
+                                  }}
+                                  className="h-9 text-sm"
+                                  disabled={isLocked || workoutCompleted}
+                                />
+                                <Input
+                                  type="number"
+                                  inputMode="numeric"
+                                  placeholder="0"
+                                  value={setInput.reps}
+                                  onChange={(e) =>
+                                    updateSetInput(exercise.id, setIdx, "reps", e.target.value)
+                                  }
+                                  onBlur={() => {
+                                    if (setInput.weight && setInput.reps) {
+                                      saveSet(exercise.id, setIdx);
+                                    }
+                                  }}
+                                  className="h-9 text-sm"
+                                  disabled={isLocked || workoutCompleted}
+                                />
+                                <div className="text-center">
+                                  {prevLog ? (
+                                    <span className="text-[10px] text-muted-foreground flex items-center justify-center gap-0.5">
+                                      <TrendingUp className="h-3 w-3" />
+                                      {prevLog.weight_kg}×{prevLog.reps_completed}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-muted-foreground">—</span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            {/* PB Indicators - only for reps-based */}
+                            {!isDuration && pbs.length > 0 && (
                               <div className="flex gap-1 pl-10">
                                 {pbs.map((pb) => (
                                   <PBIndicator key={pb} type={pb} />

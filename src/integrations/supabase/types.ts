@@ -848,6 +848,7 @@ export type Database = {
       workout_logs: {
         Row: {
           created_at: string
+          duration_seconds: number | null
           exercise_id: string
           id: string
           reps_completed: number | null
@@ -860,6 +861,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          duration_seconds?: number | null
           exercise_id: string
           id?: string
           reps_completed?: number | null
@@ -872,6 +874,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          duration_seconds?: number | null
           exercise_id?: string
           id?: string
           reps_completed?: number | null
