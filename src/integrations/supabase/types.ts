@@ -38,6 +38,54 @@ export type Database = {
         }
         Relationships: []
       }
+      day28_reviews: {
+        Row: {
+          avg_habits_percent: number | null
+          avg_nutrition_percent: number | null
+          completed_at: string | null
+          created_at: string
+          day28_review_completed: boolean
+          end_weight: number | null
+          id: string
+          journal_entries: number | null
+          longest_streak: number | null
+          reflection_text: string | null
+          start_weight: number | null
+          user_id: string
+          workouts_completed: number | null
+        }
+        Insert: {
+          avg_habits_percent?: number | null
+          avg_nutrition_percent?: number | null
+          completed_at?: string | null
+          created_at?: string
+          day28_review_completed?: boolean
+          end_weight?: number | null
+          id?: string
+          journal_entries?: number | null
+          longest_streak?: number | null
+          reflection_text?: string | null
+          start_weight?: number | null
+          user_id: string
+          workouts_completed?: number | null
+        }
+        Update: {
+          avg_habits_percent?: number | null
+          avg_nutrition_percent?: number | null
+          completed_at?: string | null
+          created_at?: string
+          day28_review_completed?: boolean
+          end_weight?: number | null
+          id?: string
+          journal_entries?: number | null
+          longest_streak?: number | null
+          reflection_text?: string | null
+          start_weight?: number | null
+          user_id?: string
+          workouts_completed?: number | null
+        }
+        Relationships: []
+      }
       favourite_meals: {
         Row: {
           created_at: string
