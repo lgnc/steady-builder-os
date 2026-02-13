@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { format, startOfWeek, subDays, addDays, isToday, isBefore, startOfDay, differenceInCalendarDays } from "date-fns";
@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { CoachChat } from "@/components/dashboard/CoachChat";
 import { DailyHabits } from "@/components/dashboard/DailyHabits";
 import { RoutineChecklistSheet } from "@/components/calendar/RoutineChecklistSheet";
@@ -297,6 +298,8 @@ export default function DashboardPage() {
   const goToPreviousDay = () => setSelectedDate((d) => subDays(d, 1));
   const goToNextDay = () => setSelectedDate((d) => addDays(d, 1));
 
+  const anchorsRef = useRef<HTMLDivElement>(null);
+
   const anchorBlocks = todayBlocks.filter((b) => ANCHOR_TYPES.includes(b.block_type));
   const seenTypes = new Set<string>();
   const uniqueAnchors = anchorBlocks.filter((b) => {
@@ -308,6 +311,55 @@ export default function DashboardPage() {
   const trainingStreak = streaks.find((s) => s.streak_type === "training")?.current_streak ?? 0;
   const morningStreak = streaks.find((s) => s.streak_type === "morning_routine")?.current_streak ?? 0;
   const completionPct = getDailyCompletion();
+
+  const nextAction = useMemo(() => {
+    const hasMorning = todayBlocks.some((b) => b.block_type === "morning_routine");
+    const hasTraining = todayBlocks.some((b) => b.block_type === "training");
+    const hasEvening = todayBlocks.some((b) => b.block_type === "evening_routine");
+    const trainingBlockObj = todayBlocks.find((b) => b.block_type === "training") ?? null;
+
+    if (viewingFuture) {
+      return { label: "View Today's Plan", icon: ChevronRight, action: () => anchorsRef.current?.scrollIntoView({ behavior: "smooth" }) };
+    }
+
+    const hour = currentTime.getHours();
+    const isMorningWindow = hour >= 4 && hour < 12;
+    const isMiddayWindow = hour >= 12 && hour < 18;
+    const isEveningWindow = hour >= 18 || hour < 4;
+
+    // For non-today dates, ignore time windows — show first incomplete
+    if (!viewingToday) {
+      if (hasMorning && !anchorCompletions.morning_routine) {
+        return { label: "Start Morning Primer", icon: Sun, action: () => { setRoutineSheetType("morning_routine"); setRoutineSheetOpen(true); } };
+      }
+      if (hasTraining && !anchorCompletions.training) {
+        return { label: "Start Workout", icon: Dumbbell, action: () => { if (trainingBlockObj) { setTrainingBlock(trainingBlockObj); setTrainingSheetOpen(true); } else { navigate("/training"); } } };
+      }
+      if (hasEvening && !anchorCompletions.evening_routine) {
+        return { label: "Complete Evening Reflection", icon: Moon, action: () => { setRoutineSheetType("evening_routine"); setRoutineSheetOpen(true); } };
+      }
+      return { label: "Review Today", icon: ChevronRight, action: () => anchorsRef.current?.scrollIntoView({ behavior: "smooth" }) };
+    }
+
+    // Rule A
+    if (isMorningWindow && hasMorning && !anchorCompletions.morning_routine) {
+      return { label: "Start Morning Primer", icon: Sun, action: () => { setRoutineSheetType("morning_routine"); setRoutineSheetOpen(true); } };
+    }
+    // Rule B
+    if (isMiddayWindow && hasTraining && !anchorCompletions.training) {
+      return { label: "Start Workout", icon: Dumbbell, action: () => { if (trainingBlockObj) { setTrainingBlock(trainingBlockObj); setTrainingSheetOpen(true); } else { navigate("/training"); } } };
+    }
+    // Rule B2
+    if (isEveningWindow && hasTraining && !anchorCompletions.training) {
+      return { label: "Finish Today's Training", icon: Dumbbell, action: () => { if (trainingBlockObj) { setTrainingBlock(trainingBlockObj); setTrainingSheetOpen(true); } else { navigate("/training"); } } };
+    }
+    // Rule C
+    if (isEveningWindow && hasEvening && !anchorCompletions.evening_routine) {
+      return { label: "Complete Evening Reflection", icon: Moon, action: () => { setRoutineSheetType("evening_routine"); setRoutineSheetOpen(true); } };
+    }
+    // Rule D
+    return { label: "Review Today", icon: ChevronRight, action: () => anchorsRef.current?.scrollIntoView({ behavior: "smooth" }) };
+  }, [currentTime, todayBlocks, anchorCompletions, viewingFuture, viewingToday, navigate]);
 
   if (authLoading) {
     return (
@@ -401,6 +453,27 @@ export default function DashboardPage() {
           </div>
         </motion.section>
 
+        {/* Dynamic Primary Action */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <Button
+            variant="hero"
+            size="lg"
+            className="w-full justify-between"
+            disabled={viewingFuture}
+            onClick={nextAction.action}
+          >
+            <span className="flex items-center gap-2">
+              <nextAction.icon className="h-5 w-5" />
+              {nextAction.label}
+            </span>
+            <ChevronRight className="h-4 w-4 opacity-60" />
+          </Button>
+        </motion.div>
+
         {/* Daily Habits */}
         {user && (
           <DailyHabits
@@ -413,6 +486,7 @@ export default function DashboardPage() {
 
         {/* Today's Anchors */}
         <motion.section
+          ref={anchorsRef}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
