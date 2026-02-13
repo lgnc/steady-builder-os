@@ -25,6 +25,8 @@ import { TrainingBlockSheet } from "@/components/calendar/TrainingBlockSheet";
 import { ReadingLogSheet } from "@/components/dashboard/ReadingLogSheet";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { toast } from "sonner";
+import { useDay28Review } from "@/hooks/useDay28Review";
+import { Day28ReviewModal } from "@/components/profile/Day28ReviewModal";
 
 interface ScheduleBlock {
   id: string;
@@ -91,6 +93,7 @@ export default function DashboardPage() {
   const [nutritionCounts, setNutritionCounts] = useState({ total: 0, completed: 0 });
 
   const { user, loading: authLoading } = useAuth();
+  const day28 = useDay28Review(user?.id);
   const navigate = useNavigate();
 
   const viewingToday = isToday(selectedDate);
@@ -486,6 +489,17 @@ export default function DashboardPage() {
             userId={user.id}
             selectedDate={selectedDate}
           />
+          {day28.trialStart && (
+            <Day28ReviewModal
+              open={day28.shouldShow}
+              onOpenChange={(open) => {
+                if (!open) day28.dismiss();
+              }}
+              userId={user.id}
+              trialStart={day28.trialStart}
+              onDismiss={day28.dismiss}
+            />
+          )}
         </>
       )}
     </MobileLayout>
