@@ -1,105 +1,52 @@
 
 
-# Ingredient Unit Formatting
+# Dynamic Primary Action Button
 
-Add human-readable display units (eggs, scoops, pieces) to ingredient output while keeping gram-based macro calculations unchanged.
-
----
-
-## Approach
-
-Add a unit mapping table and a conversion function to both edge functions (`generate-nutrition-plan` and `swap-meal`). After scaling ingredients by grams (macro math stays the same), compute `display_quantity` and `display_unit` for each ingredient. The frontend reads these new fields with a gram fallback.
+Add a single context-aware CTA button to the Dashboard, placed directly after the progress tiles section. It uses existing state (`anchorCompletions`, `todayBlocks`, `currentTime`) -- no new data fetching needed.
 
 ---
 
-## 1. Unit Mapping (Edge Functions)
+## Logic
 
-Add a `UNIT_MAP` lookup keyed by ingredient name substring:
+A `useMemo` function evaluates priority rules against current state:
 
-| Ingredient match | Unit | Grams per unit |
-|---|---|---|
-| "egg" | "eggs" | 60 |
-| "whey protein" | "scoops" | 30 |
-| "banana" | "banana" | 120 |
-| "coconut oil spray" | "spray" | 5 |
+| Priority | Condition | Label | Action |
+|---|---|---|---|
+| A | Hour 4-11 AND morning_routine block exists AND not completed | Start Morning Primer | Open morning routine sheet |
+| B | Training block exists AND not completed AND hour 12-17 | Start Workout | Open training sheet or navigate to /training |
+| B2 | Training block exists AND not completed AND hour 18-3 | Finish Today's Training | Same action as B |
+| C | Hour 18-3 AND evening_routine block exists AND not completed | Complete Evening Reflection | Open evening routine sheet |
+| D | All done or nothing applies | Review Today | Scroll to anchors section |
 
-All other ingredients default to grams (`display_unit = "g"`).
-
-Add a helper function `toDisplayUnits(name, grams)`:
-- Look up ingredient name in `UNIT_MAP`
-- Calculate `display_quantity = grams / grams_per_unit`, rounded to nearest 0.5 (minimum 0.5)
-- For gram-based items: `display_quantity = grams`, `display_unit = "g"`
+When viewing a non-today date: same rules apply but time window is ignored (show first incomplete item, or default). Future dates show "View Today's Plan" only.
 
 ---
 
-## 2. Edge Function Changes
+## UI
 
-### `generate-nutrition-plan/index.ts`
-
-In the `scaleRecipe` function, after computing scaled grams, add `display_quantity` and `display_unit` to each ingredient object in the output:
+A single full-width button inserted between the progress tiles section (line ~402) and the Daily Habits section (line ~404). Uses the existing `hero` button variant for visual emphasis.
 
 ```text
-Current output per ingredient:
-  { name, amount_grams, raw_or_cooked, category }
-
-New output per ingredient:
-  { name, amount_grams, raw_or_cooked, category, display_quantity, display_unit }
+[icon] Start Morning Primer    ->
 ```
 
-No changes to macro calculation logic -- `amount_grams` remains the source of truth.
-
-### `swap-meal/index.ts`
-
-Same change in its `scaleRecipe` function (identical structure).
+- Icon changes per state (Sun, Dumbbell, Moon, or ChevronRight for default)
+- Subtle entry animation consistent with existing motion
+- Respects `editable` and `viewingFuture` guards (disabled/muted on future dates)
 
 ---
 
-## 3. Frontend Changes
-
-### `MealCard.tsx`
-
-Update the `Ingredient` interface:
-
-```text
-interface Ingredient {
-  name: string;
-  amount_grams: number;
-  raw_or_cooked: "raw" | "cooked";
-  category: string;
-  display_quantity?: number;
-  display_unit?: string;
-}
-```
-
-Update the ingredient display line (currently `{ing.amount_grams}g`) to:
-
-- If `display_unit` exists and is not `"g"`: show `{display_quantity} {display_unit}`
-- Otherwise: show `{amount_grams}g`
-
-Keep the `(raw/cooked)` indicator for gram-based items only.
-
----
-
-## 4. Shopping List
-
-Check `ShoppingListSheet.tsx` for ingredient rendering -- apply the same display logic there if it renders ingredient quantities.
-
----
-
-## Files Changed
+## Changes
 
 | File | Action |
 |---|---|
-| `supabase/functions/generate-nutrition-plan/index.ts` | Add UNIT_MAP + toDisplayUnits helper, update scaleRecipe output |
-| `supabase/functions/swap-meal/index.ts` | Same UNIT_MAP + toDisplayUnits, update scaleRecipe output |
-| `src/components/nutrition/MealCard.tsx` | Update Ingredient interface + display logic |
-| `src/components/nutrition/ShoppingListSheet.tsx` | Update display if it renders quantities |
+| `src/pages/Dashboard.tsx` | Add `getNextAction` useMemo + button JSX between progress tiles and habits |
+
+No new files, no new components, no database changes. Pure logic + one button.
 
 ---
 
-## Technical Notes
+## Technical Detail
 
-- No database migration needed -- display fields are computed at generation time and stored in the `plan_data` JSON
-- Existing meal plans will not have display fields; the frontend gracefully falls back to grams
-- Macro calculations remain 100% gram-based; display units are presentation only
-- The UNIT_MAP is intentionally small and conservative -- only items where gram display is clearly wrong
+The `getNextAction` memo returns `{ label: string, icon: LucideIcon, action: () => void }` computed from `currentTime`, `todayBlocks`, `anchorCompletions`, `viewingFuture`, and `editable`. The action callback reuses the existing `handleAnchorClick` logic (opening sheets) or calls `navigate`. For the default "Review Today" case, it scrolls to the anchors section using a ref.
+
