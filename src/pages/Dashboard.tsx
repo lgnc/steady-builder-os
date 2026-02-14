@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { format, startOfWeek, subDays, addDays, isToday, isBefore, startOfDay, differenceInCalendarDays } from "date-fns";
@@ -92,6 +92,12 @@ export default function DashboardPage() {
   const [anchorCompletions, setAnchorCompletions] = useState<Record<string, boolean>>({});
   const [habitCounts, setHabitCounts] = useState({ total: 0, completed: 0 });
   const [nutritionCounts, setNutritionCounts] = useState({ total: 0, completed: 0 });
+  const [nutritionProgress, setNutritionProgress] = useState<{
+    consumedCalories: number;
+    consumedProtein: number;
+    targetCalories: number;
+    targetProtein: number;
+  } | null>(null);
 
   const { user, loading: authLoading } = useAuth();
   const day28 = useDay28Review(user?.id);
@@ -222,20 +228,53 @@ export default function DashboardPage() {
         const totalMeals = todayMeals.length;
 
         if (totalMeals > 0) {
-          const { data: mealCompletions } = await supabase
-            .from("meal_completions")
-            .select("meal_slot")
-            .eq("user_id", user.id)
-            .eq("meal_plan_id", mealPlan.id)
-            .eq("meal_date", selectedDateStr)
-            .eq("completed", true);
+          const [mealCompletionsRes, nutritionProfileRes] = await Promise.all([
+            supabase
+              .from("meal_completions")
+              .select("meal_slot")
+              .eq("user_id", user.id)
+              .eq("meal_plan_id", mealPlan.id)
+              .eq("meal_date", selectedDateStr)
+              .eq("completed", true),
+            supabase
+              .from("nutrition_profiles")
+              .select("calorie_target, protein_g")
+              .eq("user_id", user.id)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle(),
+          ]);
 
-          setNutritionCounts({ total: totalMeals, completed: mealCompletions?.length ?? 0 });
+          const completedSlots = new Set((mealCompletionsRes.data ?? []).map((c: any) => c.meal_slot));
+          setNutritionCounts({ total: totalMeals, completed: completedSlots.size });
+
+          // Compute consumed calories/protein from completed meals
+          let consumedCalories = 0;
+          let consumedProtein = 0;
+          for (const meal of todayMeals) {
+            if (completedSlots.has(meal.slot)) {
+              consumedCalories += meal.calories ?? 0;
+              consumedProtein += meal.protein_g ?? 0;
+            }
+          }
+
+          if (nutritionProfileRes.data) {
+            setNutritionProgress({
+              consumedCalories,
+              consumedProtein,
+              targetCalories: nutritionProfileRes.data.calorie_target,
+              targetProtein: nutritionProfileRes.data.protein_g,
+            });
+          } else {
+            setNutritionProgress(null);
+          }
         } else {
           setNutritionCounts({ total: 0, completed: 0 });
+          setNutritionProgress(null);
         }
       } else {
         setNutritionCounts({ total: 0, completed: 0 });
+        setNutritionProgress(null);
       }
     };
 
@@ -312,54 +351,16 @@ export default function DashboardPage() {
   const morningStreak = streaks.find((s) => s.streak_type === "morning_routine")?.current_streak ?? 0;
   const completionPct = getDailyCompletion();
 
-  const nextAction = useMemo(() => {
-    const hasMorning = todayBlocks.some((b) => b.block_type === "morning_routine");
-    const hasTraining = todayBlocks.some((b) => b.block_type === "training");
-    const hasEvening = todayBlocks.some((b) => b.block_type === "evening_routine");
-    const trainingBlockObj = todayBlocks.find((b) => b.block_type === "training") ?? null;
+  // Quick action button logic
+  const isEvening = currentTime.getHours() >= 17;
+  const ritualType = isEvening ? "evening_routine" : "morning_routine";
+  const ritualLabel = isEvening ? "Evening Journal" : "Morning Journal";
+  const RitualIcon = isEvening ? Moon : Sun;
+  const ritualCompleted = !!anchorCompletions[ritualType];
 
-    if (viewingFuture) {
-      return { label: "View Today's Plan", icon: ChevronRight, action: () => anchorsRef.current?.scrollIntoView({ behavior: "smooth" }) };
-    }
-
-    const hour = currentTime.getHours();
-    const isMorningWindow = hour >= 4 && hour < 12;
-    const isMiddayWindow = hour >= 12 && hour < 18;
-    const isEveningWindow = hour >= 18 || hour < 4;
-
-    // For non-today dates, ignore time windows — show first incomplete
-    if (!viewingToday) {
-      if (hasMorning && !anchorCompletions.morning_routine) {
-        return { label: "Start Morning Primer", icon: Sun, action: () => { setRoutineSheetType("morning_routine"); setRoutineSheetOpen(true); } };
-      }
-      if (hasTraining && !anchorCompletions.training) {
-        return { label: "Start Workout", icon: Dumbbell, action: () => { if (trainingBlockObj) { setTrainingBlock(trainingBlockObj); setTrainingSheetOpen(true); } else { navigate("/training"); } } };
-      }
-      if (hasEvening && !anchorCompletions.evening_routine) {
-        return { label: "Complete Evening Reflection", icon: Moon, action: () => { setRoutineSheetType("evening_routine"); setRoutineSheetOpen(true); } };
-      }
-      return { label: "Review Today", icon: ChevronRight, action: () => anchorsRef.current?.scrollIntoView({ behavior: "smooth" }) };
-    }
-
-    // Rule A
-    if (isMorningWindow && hasMorning && !anchorCompletions.morning_routine) {
-      return { label: "Start Morning Primer", icon: Sun, action: () => { setRoutineSheetType("morning_routine"); setRoutineSheetOpen(true); } };
-    }
-    // Rule B
-    if (isMiddayWindow && hasTraining && !anchorCompletions.training) {
-      return { label: "Start Workout", icon: Dumbbell, action: () => { if (trainingBlockObj) { setTrainingBlock(trainingBlockObj); setTrainingSheetOpen(true); } else { navigate("/training"); } } };
-    }
-    // Rule B2
-    if (isEveningWindow && hasTraining && !anchorCompletions.training) {
-      return { label: "Finish Today's Training", icon: Dumbbell, action: () => { if (trainingBlockObj) { setTrainingBlock(trainingBlockObj); setTrainingSheetOpen(true); } else { navigate("/training"); } } };
-    }
-    // Rule C
-    if (isEveningWindow && hasEvening && !anchorCompletions.evening_routine) {
-      return { label: "Complete Evening Reflection", icon: Moon, action: () => { setRoutineSheetType("evening_routine"); setRoutineSheetOpen(true); } };
-    }
-    // Rule D
-    return { label: "Review Today", icon: ChevronRight, action: () => anchorsRef.current?.scrollIntoView({ behavior: "smooth" }) };
-  }, [currentTime, todayBlocks, anchorCompletions, viewingFuture, viewingToday, navigate]);
+  const isTrainingDay = todayBlocks.some((b) => b.block_type === "training");
+  const trainingCompleted = !!anchorCompletions.training;
+  const trainingBlockForAction = todayBlocks.find((b) => b.block_type === "training") ?? null;
 
   if (authLoading) {
     return (
@@ -453,26 +454,91 @@ export default function DashboardPage() {
           </div>
         </motion.section>
 
-        {/* Dynamic Primary Action */}
+        {/* Quick Action Buttons */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
+          className="space-y-2"
         >
+          {/* Ritual Button */}
           <Button
-            variant="hero"
+            variant={ritualCompleted ? "outline" : "default"}
             size="lg"
             className="w-full justify-between"
             disabled={viewingFuture}
-            onClick={nextAction.action}
+            onClick={() => {
+              if (viewingFuture) return;
+              if (!editable) { toast("This day is outside the editable window."); return; }
+              setRoutineSheetType(ritualType);
+              setRoutineSheetOpen(true);
+            }}
           >
             <span className="flex items-center gap-2">
-              <nextAction.icon className="h-5 w-5" />
-              {nextAction.label}
+              <RitualIcon className="h-5 w-5" />
+              {ritualLabel}{ritualCompleted ? " ✓" : ""}
             </span>
-            <ChevronRight className="h-4 w-4 opacity-60" />
+            {!ritualCompleted && <ChevronRight className="h-4 w-4 opacity-60" />}
           </Button>
+
+          {/* Training Button */}
+          {isTrainingDay ? (
+            <Button
+              variant={trainingCompleted ? "outline" : "default"}
+              size="lg"
+              className="w-full justify-between"
+              disabled={viewingFuture || trainingCompleted}
+              onClick={() => {
+                if (viewingFuture || trainingCompleted) return;
+                if (!editable) { toast("This day is outside the editable window."); return; }
+                if (trainingBlockForAction?.training_day_id) {
+                  setTrainingBlock(trainingBlockForAction);
+                  setTrainingSheetOpen(true);
+                } else {
+                  navigate("/training");
+                }
+              }}
+            >
+              <span className="flex items-center gap-2">
+                <Dumbbell className="h-5 w-5" />
+                {trainingCompleted ? "Training Complete ✓" : "Start Today's Training"}
+              </span>
+              {!trainingCompleted && <ChevronRight className="h-4 w-4 opacity-60" />}
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              size="lg"
+              className="w-full justify-start opacity-60"
+              disabled
+            >
+              <span className="flex flex-col items-start">
+                <span className="flex items-center gap-2">
+                  <Dumbbell className="h-5 w-5" />
+                  Rest Day
+                </span>
+                <span className="text-xs font-normal text-muted-foreground">Recovery is the work.</span>
+              </span>
+            </Button>
+          )}
         </motion.div>
+
+        {/* Nutrition Progress */}
+        {nutritionProgress && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="card-stat p-3"
+          >
+            <span className="text-xs font-medium text-muted-foreground block mb-1">Nutrition</span>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span>Calories: {nutritionProgress.consumedCalories.toLocaleString()} / {nutritionProgress.targetCalories.toLocaleString()} kcal</span>
+              <span className="text-border">|</span>
+              <span>Protein: {nutritionProgress.consumedProtein}g / {nutritionProgress.targetProtein}g</span>
+            </div>
+          </motion.div>
+        )}
 
         {/* Daily Habits */}
         {user && (
