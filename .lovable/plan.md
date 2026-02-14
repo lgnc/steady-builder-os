@@ -1,97 +1,79 @@
 
 
-# Time-Based Exercise Logging
+# Dashboard Quick Actions + Nutrition Progress
 
-Add automatic input switching so duration-based exercises (e.g., "Battle Ropes -- 30 sec", "Plank Hold -- 45-60 sec") show a time input instead of weight + reps fields.
-
----
-
-## Current State
-
-The `training_exercises.reps` field is a string with mixed formats:
-- Rep-based: `"8-12"`, `"5"`, `"10 each"`
-- Duration-based: `"30 sec"`, `"45-60 sec"`, `"45 sec each"`
-- Distance/other: `"500m"`, `"40m"`, `"10 cal"`, `"6x100m"`
-
-The `workout_logs` table only has `weight_kg` and `reps_completed` columns -- no duration field.
-
-All exercises currently show weight + reps inputs regardless of type.
+Replace the single "Dynamic Primary Action" CTA button with two stacked quick-action buttons and a compact nutrition progress indicator.
 
 ---
 
-## 1. Database Migration
+## 1. Remove Current Primary CTA
 
-Add `duration_seconds` column to `workout_logs`:
+Delete the `nextAction` useMemo block (lines ~315-362) and the motion.div rendering the hero button (lines ~456-475). Remove unused imports if any become orphaned.
 
+---
+
+## 2. Add Two Quick Action Buttons
+
+Insert two full-width buttons between the progress tiles section and the Daily Habits section, wrapped in a single motion.div with `space-y-2`.
+
+### Button A: Ritual Button (time-based)
+
+- **Before 5:00 PM** (hour < 17): label = "Morning Journal", icon = Sun
+- **5:00 PM onward** (hour >= 17): label = "Evening Journal", icon = Moon
+- **Completed state**: If the corresponding routine (`morning_routine` before 5pm, `evening_routine` from 5pm) is completed for the selected date, show label + " ✓" with muted styling (non-primary variant)
+- **On tap**: Opens the routine checklist sheet (`setRoutineSheetType` + `setRoutineSheetOpen(true)`) -- reuses existing logic from `handleAnchorClick`
+- **Date-aware**: Uses `selectedDate` and `anchorCompletions` which already update on date navigation
+- **Future dates**: Disabled
+
+### Button B: Training Button (schedule-based)
+
+Uses existing state: `todayBlocks` (has a training block?) and `anchorCompletions.training`.
+
+| Condition | Label | Style | Action |
+|---|---|---|---|
+| Training day, not completed | Start Today's Training | Primary | Open training sheet or navigate to /training |
+| Training day, completed | Training Complete ✓ | Muted/disabled | No action |
+| Rest day (no training block) | Rest Day | Disabled, greyed out | None |
+
+Rest day shows small subtext: "Recovery is the work."
+
+Both buttons use the existing `Button` component with appropriate variants (`default` for active, `outline` or `secondary` for completed/rest states).
+
+---
+
+## 3. Add Nutrition Progress Indicator
+
+### Data Fetching
+
+The Dashboard already fetches the meal plan and computes `nutritionCounts` (total meals, completed meals). Extend this to also compute consumed calories and protein from completed meals.
+
+Add new state:
 ```text
-ALTER TABLE workout_logs ADD COLUMN duration_seconds integer;
+nutritionProgress: { 
+  consumedCalories: number; 
+  consumedProtein: number; 
+  targetCalories: number; 
+  targetProtein: number; 
+}
 ```
 
-This is nullable, so existing logs are unaffected. No other table changes needed -- the prescription type is inferred from the `reps` string, not stored separately.
+In the existing `fetchData` useEffect (where meal plan is already loaded), after getting `todayMeals` and `mealCompletions`:
+- Sum `calories` and `protein_g` from completed meals
+- Fetch `nutrition_profiles` for `calorie_target` and `protein_g` targets
+- Set the new state
 
----
+### UI
 
-## 2. Prescription Type Detection (Frontend Logic)
-
-Add a helper function `getPrescriptionType(reps: string)` in `Workout.tsx`:
-
-| Pattern | Type | Examples |
-|---|---|---|
-| Contains "sec" or "min" | `"duration"` | "30 sec", "45-60 sec", "45 sec each" |
-| Everything else | `"reps"` | "8-12", "5", "10 each", "500m", "10 cal" |
-
-Keep it simple: only `sec`/`min` patterns trigger duration mode. Distance and calorie exercises remain as reps (users can log distance in the reps field, which already works).
-
-Also add `parsePrescribedSeconds(reps: string): number | null` to extract the target duration for display (e.g., "30 sec" returns 30, "45-60 sec" returns 60).
-
----
-
-## 3. UI Changes in Workout.tsx
-
-### SetInput interface update
+A compact single section below the two buttons, before Daily Habits:
 
 ```text
-Current:  { weight: string; reps: string; saved: boolean }
-New:      { weight: string; reps: string; duration: string; saved: boolean }
+Nutrition
+Calories: 1,200 / 2,400 kcal  |  Protein: 90g / 180g
 ```
 
-### Set header row (line ~593)
+Two inline text items, small font (`text-xs`), muted color. No progress bars, no macro breakdown -- just two numbers. Wrapped in a subtle card-stat container to match the progress tiles style.
 
-Conditionally render columns based on prescription type:
-
-- **Reps-based**: `Set | Weight (kg) | Reps | Prev` (no change)
-- **Duration-based**: `Set | Time (sec) | Prev` (2-column layout, no weight/reps)
-
-### Set input rows (line ~601)
-
-- **Reps-based**: Weight input + Reps input (no change)
-- **Duration-based**: Single time input field (seconds), wider span. Placeholder shows prescribed time (e.g., "30").
-
-### Save logic update
-
-- Duration exercises: save `duration_seconds` instead of `weight_kg`/`reps_completed`
-- Set `weight_kg = null` and `reps_completed = null` for duration sets
-- Auto-save on blur when duration field has a value
-
-### Previous log display
-
-- Duration exercises: show previous `duration_seconds` value (e.g., "30s") instead of "weight x reps"
-
-### allSetsLogged check (line ~458)
-
-Update to check `duration` field for duration exercises instead of requiring both weight and reps.
-
----
-
-## 4. PB Detection for Duration Exercises
-
-Skip PB detection for duration-based exercises (no meaningful "personal best" for holding a plank longer in this context). The `detectPBs` function will only run for reps-based exercises.
-
----
-
-## 5. Summary Calculations
-
-In `computeSummaryData`, duration exercises contribute 0 volume (no weight x reps). They are excluded from volume calculations but still count toward workout completion.
+If no nutrition plan exists, hide this section entirely (don't show zeros with no context).
 
 ---
 
@@ -99,17 +81,16 @@ In `computeSummaryData`, duration exercises contribute 0 volume (no weight x rep
 
 | File | Action |
 |---|---|
-| Database migration | Add `duration_seconds` column to `workout_logs` |
-| `src/pages/Workout.tsx` | Add prescription type detection, conditional input rendering, updated save/load logic |
+| `src/pages/Dashboard.tsx` | Remove nextAction useMemo + hero button; add ritual + training buttons; add nutrition progress state + UI |
 
-No new components or files needed. All changes are contained in the workout page and one migration.
+No new files or components. All changes contained in Dashboard.tsx.
 
 ---
 
 ## Technical Notes
 
-- Prescription type is inferred from the `reps` string at render time -- no new database column on `training_exercises`
-- The `duration` field in `SetInput` stores seconds as a string (same pattern as weight/reps)
-- Historical logs with `duration_seconds = null` display correctly (they were rep-based)
-- Distance exercises ("500m", "40m") stay as reps-based -- users log the distance value in the reps field
-
+- The 5:00 PM cutoff uses `currentTime.getHours() >= 17` which already updates every 60 seconds
+- Completion detection for morning/evening routines already exists in `anchorCompletions`
+- Training day detection already exists via `todayBlocks.some(b => b.block_type === "training")`
+- Nutrition profile fetch is one additional query but can be parallelized with existing fetches
+- All buttons respect date navigation -- they read from `selectedDate`-dependent state
