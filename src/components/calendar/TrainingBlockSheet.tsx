@@ -21,6 +21,7 @@ interface TrainingBlockSheetProps {
   block: ScheduleBlock | null;
   blocks: ScheduleBlock[];
   userId: string;
+  selectedDate?: string;
   onRescheduleComplete: (updatedBlocks: ScheduleBlock[]) => void;
 }
 
@@ -36,6 +37,7 @@ export function TrainingBlockSheet({
   block,
   blocks,
   userId,
+  selectedDate,
   onRescheduleComplete,
 }: TrainingBlockSheetProps) {
   const navigate = useNavigate();
@@ -52,8 +54,8 @@ export function TrainingBlockSheet({
   const handleStartWorkout = () => {
     if (block.training_day_id) {
       onOpenChange(false);
-      const today = new Date().toISOString().split("T")[0];
-      navigate(`/workout/${block.training_day_id}?date=${today}`);
+      const dateParam = selectedDate || new Date().toISOString().split("T")[0];
+      navigate(`/workout/${block.training_day_id}?date=${dateParam}`);
     }
   };
 
