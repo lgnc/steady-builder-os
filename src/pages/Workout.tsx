@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { getWeekStartDate } from "@/lib/weekUtils";
 import { WarmUpBlock } from "@/components/workout/WarmUpBlock";
 import { MobilityBlock } from "@/components/workout/MobilityBlock";
 import { ExerciseFormCues } from "@/components/workout/ExerciseFormCues";
@@ -96,6 +97,16 @@ export default function WorkoutPage() {
   const [searchParams] = useSearchParams();
   const weekNumber = parseInt(searchParams.get("week") || "1", 10);
 
+  // Week-scoped instance: compute week_start_date from ?date param or today
+  const dateParam = searchParams.get("date");
+  const referenceDate = dateParam ? new Date(dateParam + "T00:00:00") : new Date();
+  const weekStartDate = getWeekStartDate(referenceDate);
+  const prevWeekStartDate = (() => {
+    const d = new Date(referenceDate);
+    d.setDate(d.getDate() - 7);
+    return getWeekStartDate(d);
+  })();
+
   const [trainingDay, setTrainingDay] = useState<TrainingDay | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [experienceTier, setExperienceTier] = useState("beginner");
@@ -150,21 +161,19 @@ export default function WorkoutPage() {
             .select("*")
             .eq("user_id", user.id)
             .eq("training_day_id", trainingDayId)
-            .eq("week_number", weekNumber),
-          weekNumber > 1
-            ? supabase
-                .from("workout_logs")
-                .select("*")
-                .eq("user_id", user.id)
-                .eq("training_day_id", trainingDayId)
-                .eq("week_number", weekNumber - 1)
-            : Promise.resolve({ data: [] as WorkoutLog[] }),
+            .eq("week_start_date", weekStartDate),
+          supabase
+            .from("workout_logs")
+            .select("*")
+            .eq("user_id", user.id)
+            .eq("training_day_id", trainingDayId)
+            .eq("week_start_date", prevWeekStartDate),
           supabase
             .from("user_training_schedule")
             .select("completed")
             .eq("user_id", user.id)
             .eq("training_day_id", trainingDayId)
-            .eq("week_number", weekNumber)
+            .eq("week_start_date", weekStartDate)
             .maybeSingle(),
         ]);
 
@@ -237,7 +246,7 @@ export default function WorkoutPage() {
     };
 
     fetchData();
-  }, [user, trainingDayId, weekNumber]);
+  }, [user, trainingDayId, weekStartDate, prevWeekStartDate]);
 
   const getSetCountForTier = (exercise: Exercise, tier: string): number => {
     switch (tier) {
@@ -320,6 +329,7 @@ export default function WorkoutPage() {
           training_day_id: trainingDayId,
           exercise_id: exerciseId,
           week_number: weekNumber,
+          week_start_date: weekStartDate,
           set_number: setIndex + 1,
           weight_kg: weightKg,
           reps_completed: repsCompleted,
@@ -408,7 +418,7 @@ export default function WorkoutPage() {
       .from("user_training_schedule")
       .select("completed")
       .eq("user_id", user.id)
-      .eq("week_number", weekNumber);
+      .eq("week_start_date", weekStartDate);
 
     const weeklyTotal = weekSchedule?.length || 0;
     const weeklyCompleted = weekSchedule?.filter((s) => s.completed).length || 0;
@@ -449,7 +459,7 @@ export default function WorkoutPage() {
         .select("id")
         .eq("user_id", user.id)
         .eq("training_day_id", trainingDayId)
-        .eq("week_number", weekNumber)
+        .eq("week_start_date", weekStartDate)
         .maybeSingle();
 
       if (existing) {
@@ -470,6 +480,7 @@ export default function WorkoutPage() {
           training_day_id: trainingDayId,
           day_of_week: block?.day_of_week ?? new Date().getDay(),
           week_number: weekNumber,
+          week_start_date: weekStartDate,
           completed: true,
           completed_at: new Date().toISOString(),
         });

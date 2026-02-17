@@ -812,6 +812,7 @@ export type Database = {
           updated_at: string
           user_id: string
           week_number: number
+          week_start_date: string | null
         }
         Insert: {
           completed?: boolean | null
@@ -823,6 +824,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           week_number?: number
+          week_start_date?: string | null
         }
         Update: {
           completed?: boolean | null
@@ -834,6 +836,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           week_number?: number
+          week_start_date?: string | null
         }
         Relationships: [
           {
@@ -857,6 +860,7 @@ export type Database = {
           updated_at: string
           user_id: string
           week_number: number
+          week_start_date: string | null
           weight_kg: number | null
         }
         Insert: {
@@ -870,6 +874,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           week_number?: number
+          week_start_date?: string | null
           weight_kg?: number | null
         }
         Update: {
@@ -883,6 +888,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           week_number?: number
+          week_start_date?: string | null
           weight_kg?: number | null
         }
         Relationships: [
