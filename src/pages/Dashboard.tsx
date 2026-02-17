@@ -621,6 +621,7 @@ export default function DashboardPage() {
             block={trainingBlock}
             blocks={todayBlocks}
             userId={user.id}
+            selectedDate={selectedDateStr}
             onRescheduleComplete={(updatedBlocks) => {
               setTodayBlocks(updatedBlocks);
               setTrainingSheetOpen(false);
