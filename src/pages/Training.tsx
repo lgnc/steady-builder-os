@@ -15,6 +15,8 @@ import { MobileLayout } from "@/components/layout/MobileLayout";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getWeekStartDate } from "@/lib/weekUtils";
+import { format } from "date-fns";
 
 interface TrainingDay {
   id: string;
@@ -125,11 +127,13 @@ export default function TrainingPage() {
         }
       }
 
-      // Get user's schedule
+      // Get user's schedule for current week only
+      const currentWeekStart = getWeekStartDate(new Date());
       const { data: schedule } = await supabase
         .from("user_training_schedule")
         .select("*")
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .eq("week_start_date", currentWeekStart);
 
       if (schedule) {
         setUserSchedule(schedule);
@@ -166,11 +170,12 @@ export default function TrainingPage() {
     const existingSchedule = userSchedule.find(s => s.training_day_id === dayId);
     
     if (existingSchedule) {
-      await supabase
-        .from("user_training_schedule")
-        .update({ completed: true, completed_at: new Date().toISOString() })
-        .eq("id", existingSchedule.id);
+          await supabase
+            .from("user_training_schedule")
+            .update({ completed: true, completed_at: new Date().toISOString() })
+            .eq("id", existingSchedule.id);
     } else {
+      const currentWeekStart = getWeekStartDate(new Date());
       await supabase
         .from("user_training_schedule")
         .insert({
@@ -178,16 +183,19 @@ export default function TrainingPage() {
           training_day_id: dayId,
           day_of_week: new Date().getDay(),
           week_number: 1,
+          week_start_date: currentWeekStart,
           completed: true,
           completed_at: new Date().toISOString(),
         });
     }
 
-    // Refresh schedule
+    // Refresh schedule for current week
+    const refreshWeekStart = getWeekStartDate(new Date());
     const { data: schedule } = await supabase
       .from("user_training_schedule")
       .select("*")
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .eq("week_start_date", refreshWeekStart);
 
     if (schedule) {
       setUserSchedule(schedule);
@@ -326,7 +334,7 @@ export default function TrainingPage() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.05 }}
-                      onClick={() => navigate(`/workout/${day.id}`)}
+                      onClick={() => navigate(`/workout/${day.id}?date=${format(new Date(), "yyyy-MM-dd")}`)}
                       className={cn(
                         "w-full text-left p-4 rounded-lg border transition-all duration-200",
                         completed

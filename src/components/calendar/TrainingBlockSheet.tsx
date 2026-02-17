@@ -52,7 +52,8 @@ export function TrainingBlockSheet({
   const handleStartWorkout = () => {
     if (block.training_day_id) {
       onOpenChange(false);
-      navigate(`/workout/${block.training_day_id}`);
+      const today = new Date().toISOString().split("T")[0];
+      navigate(`/workout/${block.training_day_id}?date=${today}`);
     }
   };
 

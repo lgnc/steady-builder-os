@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { format, startOfWeek, subDays, addDays, isToday, isBefore, startOfDay, differenceInCalendarDays } from "date-fns";
+import { getWeekStartDate } from "@/lib/weekUtils";
 import {
   Sun,
   Moon,
@@ -186,11 +187,13 @@ export default function DashboardPage() {
         }
       }
 
+      const weekStart = getWeekStartDate(selectedDate);
       const { data: trainingData } = await supabase
         .from("user_training_schedule")
         .select("completed")
         .eq("user_id", user.id)
         .eq("day_of_week", dayOfWeek)
+        .eq("week_start_date", weekStart)
         .eq("completed", true)
         .limit(1);
 
