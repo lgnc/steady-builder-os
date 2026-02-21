@@ -101,18 +101,18 @@ export function TrainingBlockSheet({
   const isCompleted = scheduledWorkout?.status === "completed";
 
   const handleStartWorkout = () => {
-    if (block.training_day_id) {
+    if (block.training_day_id && scheduledWorkout) {
       onOpenChange(false);
       const dateParam = selectedDate || new Date().toISOString().split("T")[0];
-      navigate(`/workout/${block.training_day_id}?date=${dateParam}`);
+      navigate(`/workout/${block.training_day_id}?date=${dateParam}&swId=${scheduledWorkout.id}`);
     }
   };
 
   const handleViewWorkout = () => {
-    if (block.training_day_id) {
+    if (block.training_day_id && scheduledWorkout) {
       onOpenChange(false);
       const dateParam = selectedDate || new Date().toISOString().split("T")[0];
-      navigate(`/workout/${block.training_day_id}?date=${dateParam}`);
+      navigate(`/workout/${block.training_day_id}?date=${dateParam}&swId=${scheduledWorkout.id}`);
     }
   };
 
@@ -289,22 +289,42 @@ export function TrainingBlockSheet({
               </SheetHeader>
 
               <div className="space-y-3">
-                <Button
-                  onClick={handleStartWorkout}
-                  className="w-full h-12 text-base font-semibold"
-                >
-                  <Dumbbell className="h-5 w-5 mr-2" />
-                  Start Workout
-                </Button>
+                {isCompleted ? (
+                  <>
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/30">
+                      <Check className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium text-primary">Workout Completed</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={handleViewWorkout}
+                      className="w-full h-11"
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Workout
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    onClick={handleStartWorkout}
+                    className="w-full h-12 text-base font-semibold"
+                    disabled={!scheduledWorkout}
+                  >
+                    <Dumbbell className="h-5 w-5 mr-2" />
+                    {scheduledWorkout?.status === "in_progress" ? "Continue Workout" : "Start Workout"}
+                  </Button>
+                )}
 
-                <Button
-                  variant="outline"
-                  onClick={handleOpenReschedule}
-                  className="w-full h-11"
-                >
-                  <CalendarClock className="h-4 w-4 mr-2" />
-                  Reschedule
-                </Button>
+                {!isCompleted && (
+                  <Button
+                    variant="outline"
+                    onClick={handleOpenReschedule}
+                    className="w-full h-11"
+                  >
+                    <CalendarClock className="h-4 w-4 mr-2" />
+                    Reschedule
+                  </Button>
+                )}
               </div>
             </motion.div>
           ) : (
