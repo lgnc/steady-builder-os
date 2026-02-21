@@ -322,24 +322,47 @@ export default function WorkoutPage() {
         } as any)
         .eq("id", existingLog.id);
     } else {
-      const { data } = await supabase
+      // Guard against duplicate inserts (double-tap / race condition)
+      const { data: dupCheck } = await supabase
         .from("workout_logs")
-        .insert({
-          user_id: user.id,
-          training_day_id: trainingDayId,
-          exercise_id: exerciseId,
-          week_number: weekNumber,
-          week_start_date: weekStartDate,
-          set_number: setIndex + 1,
-          weight_kg: weightKg,
-          reps_completed: repsCompleted,
-          duration_seconds: durationSeconds,
-        } as any)
-        .select()
-        .single();
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("exercise_id", exerciseId)
+        .eq("set_number", setIndex + 1)
+        .eq("week_start_date", weekStartDate)
+        .maybeSingle();
 
-      if (data) {
-        setCurrentLogs((prev) => [...prev, data as any]);
+      if (dupCheck) {
+        // Already exists – update instead
+        await supabase
+          .from("workout_logs")
+          .update({
+            weight_kg: weightKg,
+            reps_completed: repsCompleted,
+            duration_seconds: durationSeconds,
+          } as any)
+          .eq("id", dupCheck.id);
+        setCurrentLogs((prev) => [...prev, { ...dupCheck, weight_kg: weightKg, reps_completed: repsCompleted, duration_seconds: durationSeconds } as any]);
+      } else {
+        const { data } = await supabase
+          .from("workout_logs")
+          .insert({
+            user_id: user.id,
+            training_day_id: trainingDayId,
+            exercise_id: exerciseId,
+            week_number: weekNumber,
+            week_start_date: weekStartDate,
+            set_number: setIndex + 1,
+            weight_kg: weightKg,
+            reps_completed: repsCompleted,
+            duration_seconds: durationSeconds,
+          } as any)
+          .select()
+          .single();
+
+        if (data) {
+          setCurrentLogs((prev) => [...prev, data as any]);
+        }
       }
     }
 
@@ -512,7 +535,7 @@ export default function WorkoutPage() {
     return sets.every((s) => isDuration ? !!s.duration : (!!s.weight && !!s.reps));
   });
 
-  const isLocked = !warmupComplete && !workoutCompleted;
+  const isLocked = !warmupComplete && !workoutCompleted && currentLogs.length === 0;
 
   if (authLoading || loading) {
     return (
