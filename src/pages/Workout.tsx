@@ -122,6 +122,14 @@ export default function WorkoutPage() {
     weeklyCompleted: 0,
     weeklyTotal: 0,
   });
+  const [showDebug, setShowDebug] = useState(false);
+  const [debugLog, setDebugLog] = useState<string[]>([]);
+
+  const addDebug = (label: string, value: any) => {
+    const msg = `[WO-DEBUG] ${label}: ${typeof value === "object" ? JSON.stringify(value, null, 2) : value}`;
+    console.log(msg);
+    setDebugLog((prev) => [...prev, `${new Date().toISOString().slice(11, 19)} ${label}: ${typeof value === "object" ? JSON.stringify(value) : value}`]);
+  };
 
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -136,6 +144,13 @@ export default function WorkoutPage() {
   useEffect(() => {
     const fetchData = async () => {
       if (!user || !trainingDayId) return;
+
+      setDebugLog([]);
+      addDebug("dateParam (from URL)", dateParam);
+      addDebug("referenceDate", referenceDate.toISOString());
+      addDebug("computedWeekStartDate", weekStartDate);
+      addDebug("training_day_id", trainingDayId);
+      addDebug("user_id", user.id);
 
       // 1. Fetch template data + onboarding in parallel
       const [dayRes, exercisesRes, onboardingRes] = await Promise.all([
@@ -176,6 +191,12 @@ export default function WorkoutPage() {
       if (onboardingRes.data) setExperienceTier(tier);
 
       // 2. Upsert session: INSERT ON CONFLICT DO NOTHING, then SELECT
+      addDebug("SESSION UPSERT query", {
+        table: "workout_sessions",
+        action: "insert",
+        filters: { user_id: user.id, training_day_id: trainingDayId, week_start_date: weekStartDate },
+      });
+
       await supabase
         .from("workout_sessions")
         .insert({
@@ -199,6 +220,10 @@ export default function WorkoutPage() {
       const sessionStatus = (sessionRow as any)?.status as string | undefined;
       setCurrentSessionId(sessionId);
 
+      addDebug("resolved currentSessionId", sessionId);
+      addDebug("session status", sessionStatus);
+      addDebug("full session row", sessionRow);
+
       if (sessionStatus === "completed") {
         setWorkoutCompleted(true);
       }
@@ -206,18 +231,39 @@ export default function WorkoutPage() {
       // 3. Load current session's sets
       let loadedSets: WorkoutSet[] = [];
       if (sessionId) {
+        addDebug("CURRENT SETS query", {
+          table: "workout_sets",
+          filter: { session_id: sessionId },
+          NOTE: "✅ CORRECT: filtered by session_id only",
+        });
+
         const { data: setsData } = await supabase
           .from("workout_sets")
           .select("*")
           .eq("session_id", sessionId);
         loadedSets = (setsData || []) as any[];
         setCurrentSets(loadedSets);
+
+        addDebug("currentSets count", loadedSets.length);
+        addDebug("currentSets data", loadedSets.map((s) => ({
+          exercise: s.training_exercise_id.slice(0, 8),
+          set: s.set_index,
+          weight: s.weight_kg,
+          reps: s.reps,
+        })));
       }
 
       // 4. Load previous session's sets (for "Prev" column)
+      addDebug("PREV SESSION query", {
+        table: "workout_sessions",
+        filters: { user_id: user.id, training_day_id: trainingDayId, week_start_date_lt: weekStartDate },
+        order: "week_start_date DESC",
+        limit: 1,
+      });
+
       const { data: prevSession } = await supabase
         .from("workout_sessions")
-        .select("id")
+        .select("id, week_start_date")
         .eq("user_id", user.id)
         .eq("training_day_id", trainingDayId)
         .lt("week_start_date", weekStartDate)
@@ -225,15 +271,25 @@ export default function WorkoutPage() {
         .limit(1)
         .maybeSingle();
 
+      addDebug("prevSession result", prevSession);
+
       if (prevSession) {
         const { data: prevSetsData } = await supabase
           .from("workout_sets")
           .select("*")
           .eq("session_id", (prevSession as any).id);
         setPreviousSets((prevSetsData || []) as any[]);
+        addDebug("previousSets count (display only, NOT used for inputs)", (prevSetsData || []).length);
+      } else {
+        addDebug("previousSets", "none found");
       }
 
       // 5. Initialize set inputs from current session's sets ONLY
+      addDebug("HYDRATION SOURCE", loadedSets.length > 0
+        ? "✅ A) workout_sets WHERE session_id = currentSessionId"
+        : "✅ A) BLANK — no sets in current session, inputs will be empty"
+      );
+
       if (exerciseData.length > 0) {
         const inputs: Record<string, SetInput[]> = {};
 
@@ -253,6 +309,16 @@ export default function WorkoutPage() {
               saved: !!ws,
             };
           });
+
+          // Log per-exercise hydration
+          if (existingSets.length > 0) {
+            addDebug(`hydration[${ex.name}]`, existingSets.map((s) => ({
+              set: s.set_index,
+              weight: s.weight_kg,
+              reps: s.reps,
+              source_session_id: s.session_id.slice(0, 8),
+            })));
+          }
         });
 
         setSetInputs(inputs);
@@ -568,6 +634,32 @@ export default function WorkoutPage() {
   return (
     <MobileLayout>
       <div className="flex flex-col h-full">
+        {/* Debug Panel Toggle */}
+        <button
+          onClick={() => setShowDebug((v) => !v)}
+          className="fixed top-2 right-2 z-50 bg-destructive text-destructive-foreground text-[10px] px-2 py-1 rounded font-mono"
+        >
+          {showDebug ? "Hide Debug" : "🐛 Debug"}
+        </button>
+
+        {showDebug && (
+          <div className="fixed inset-x-0 top-8 z-50 mx-2 max-h-[50vh] overflow-auto bg-card border border-border rounded-lg p-3 shadow-lg">
+            <div className="text-[10px] font-mono space-y-0.5 text-foreground">
+              <div className="font-bold text-primary mb-1">Workout Debug Panel</div>
+              <div><span className="text-muted-foreground">sessionId:</span> {currentSessionId?.slice(0, 8) || "null"}</div>
+              <div><span className="text-muted-foreground">weekStartDate:</span> {weekStartDate}</div>
+              <div><span className="text-muted-foreground">dateParam:</span> {dateParam || "null"}</div>
+              <div><span className="text-muted-foreground">trainingDayId:</span> {trainingDayId?.slice(0, 8)}</div>
+              <div><span className="text-muted-foreground">currentSets:</span> {currentSets.length}</div>
+              <div><span className="text-muted-foreground">previousSets:</span> {previousSets.length}</div>
+              <hr className="border-border my-1" />
+              {debugLog.map((line, i) => (
+                <div key={i} className={line.includes("✅") ? "text-green-500" : line.includes("❌") ? "text-destructive" : ""}>{line}</div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="px-6 py-4 border-b border-border/50 shrink-0">
           <button
