@@ -15,26 +15,29 @@ interface GoalRow {
   locked_at: string | null;
 }
 
-function computeProgress(goal: GoalRow): number {
+function computeProgress(goal: GoalRow): { pct: number; isNegative: boolean } {
   const { goal_type, baseline_value, target_value, current_value } = goal;
 
   // Percentage-based goals (consistency, habits, nutrition)
   if (["consistency", "habits", "nutrition"].includes(goal_type)) {
-    return Math.min(100, Math.max(0, (current_value / target_value) * 100));
+    const pct = Math.min(100, Math.max(0, (current_value / target_value) * 100));
+    return { pct, isNegative: false };
   }
 
   // Weight loss: progress = how much lost vs target loss
   if (goal_type === "weight_loss") {
-    const toLose = target_value; // e.g. 5kg
-    const lost = baseline_value - current_value;
-    if (toLose <= 0) return 0;
-    return Math.min(100, Math.max(0, (lost / toLose) * 100));
+    const toLose = target_value; // e.g. 2.5kg
+    const lost = baseline_value - current_value; // negative if gained weight
+    if (toLose <= 0) return { pct: 0, isNegative: false };
+    const raw = (lost / toLose) * 100;
+    return { pct: Math.min(100, raw), isNegative: raw < 0 };
   }
 
   // Strength / pull-ups: progress toward target from baseline
   const range = target_value - baseline_value;
-  if (range <= 0) return current_value >= target_value ? 100 : 0;
-  return Math.min(100, Math.max(0, ((current_value - baseline_value) / range) * 100));
+  if (range <= 0) return { pct: current_value >= target_value ? 100 : 0, isNegative: false };
+  const raw = ((current_value - baseline_value) / range) * 100;
+  return { pct: Math.min(100, raw), isNegative: raw < 0 };
 }
 
 export function EightWeekGoalsCard({ userId }: { userId: string }) {
@@ -76,14 +79,24 @@ export function EightWeekGoalsCard({ userId }: { userId: string }) {
 
       <div className="space-y-3">
         {goals.map((goal) => {
-          const pct = computeProgress(goal);
+          const { pct, isNegative } = computeProgress(goal);
+          const displayPct = Math.round(pct);
           return (
             <div key={goal.id} className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-foreground font-medium">{goal.goal_label}</span>
-                <span className="text-muted-foreground">{Math.round(pct)}%</span>
+                <span className={isNegative ? "text-destructive font-medium" : "text-muted-foreground"}>
+                  {isNegative ? `${displayPct}%` : `${displayPct}%`}
+                </span>
               </div>
-              <ProgressBar value={pct} />
+              <ProgressBar value={Math.max(0, pct)} fillClassName={isNegative ? "bg-destructive" : undefined} />
+              {isNegative && (
+                <p className="text-[10px] text-destructive">
+                  {goal.goal_type === "weight_loss"
+                    ? `+${(goal.current_value - goal.baseline_value).toFixed(1)}kg from start`
+                    : "Below baseline"}
+                </p>
+              )}
             </div>
           );
         })}
