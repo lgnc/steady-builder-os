@@ -16,6 +16,7 @@ import { GymCommuteStep } from "@/components/onboarding/GymCommuteStep";
 import { TrainingStep } from "@/components/onboarding/TrainingStep";
 import { ProgramStep } from "@/components/onboarding/ProgramStep";
 import { GoalsStep } from "@/components/onboarding/GoalsStep";
+import { EightWeekGoalsStep, type EightWeekGoal } from "@/components/onboarding/EightWeekGoalsStep";
 import { FrictionStep } from "@/components/onboarding/FrictionStep";
 import { ReviewStep } from "@/components/onboarding/ReviewStep";
 import { NutritionStep } from "@/components/onboarding/NutritionStep";
@@ -87,7 +88,7 @@ export interface OnboardingData {
   habitsBreak: string[];
 }
 
-const TOTAL_STEPS = 12;
+const TOTAL_STEPS = 13;
 
 const defaultData: OnboardingData = {
   weekdayWakeTime: "06:00",
@@ -130,6 +131,7 @@ const defaultData: OnboardingData = {
 export default function OnboardingPage() {
   const [step, setStep] = useState(1);
   const [data, setData] = useState<OnboardingData>(defaultData);
+  const [eightWeekGoals, setEightWeekGoals] = useState<EightWeekGoal[]>([]);
   const [loading, setLoading] = useState(false);
   const [showSleepWarning, setShowSleepWarning] = useState(false);
   
@@ -281,6 +283,7 @@ export default function OnboardingPage() {
       await generateSchedule();
       await seedDefaultChecklistItems();
       await seedHabits();
+      await saveEightWeekGoals();
 
       toast({
         title: "Structure installed",
@@ -297,6 +300,21 @@ export default function OnboardingPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const saveEightWeekGoals = async () => {
+    if (!user || eightWeekGoals.length === 0) return;
+
+    const rows = eightWeekGoals.map((g) => ({
+      user_id: user.id,
+      goal_type: g.goal_type,
+      goal_label: g.goal_label,
+      target_value: g.target_value,
+      baseline_value: g.goal_type === "weight_loss" ? (data.weightKg ?? 0) : 0,
+      current_value: g.goal_type === "weight_loss" ? (data.weightKg ?? 0) : 0,
+    }));
+
+    await supabase.from("user_eight_week_goals").insert(rows);
   };
 
   const seedHabits = async () => {
@@ -617,6 +635,7 @@ export default function OnboardingPage() {
     "Training Experience",
     "Select Program",
     "Your Goals",
+    "8-Week Goals",
     "Current State",
     "Body & Nutrition",
     "Habits",
@@ -662,10 +681,11 @@ export default function OnboardingPage() {
               {step === 6 && <TrainingStep data={data} updateData={updateData} />}
               {step === 7 && <ProgramStep data={data} updateData={updateData} />}
               {step === 8 && <GoalsStep data={data} updateData={updateData} />}
-              {step === 9 && <FrictionStep data={data} updateData={updateData} />}
-              {step === 10 && <NutritionStep data={data} updateData={updateData} />}
-              {step === 11 && <HabitsStep data={data} updateData={updateData} />}
-              {step === 12 && <ReviewStep data={data} />}
+              {step === 9 && <EightWeekGoalsStep goals={eightWeekGoals} onGoalsChange={setEightWeekGoals} data={data} />}
+              {step === 10 && <FrictionStep data={data} updateData={updateData} />}
+              {step === 11 && <NutritionStep data={data} updateData={updateData} />}
+              {step === 12 && <HabitsStep data={data} updateData={updateData} />}
+              {step === 13 && <ReviewStep data={data} eightWeekGoals={eightWeekGoals} />}
             </motion.div>
           </AnimatePresence>
         </div>

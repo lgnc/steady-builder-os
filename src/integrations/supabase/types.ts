@@ -839,6 +839,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_eight_week_goals: {
+        Row: {
+          baseline_value: number
+          created_at: string
+          current_value: number
+          goal_label: string
+          goal_type: string
+          id: string
+          locked_at: string | null
+          target_value: number
+          user_id: string
+        }
+        Insert: {
+          baseline_value?: number
+          created_at?: string
+          current_value?: number
+          goal_label: string
+          goal_type: string
+          id?: string
+          locked_at?: string | null
+          target_value: number
+          user_id: string
+        }
+        Update: {
+          baseline_value?: number
+          created_at?: string
+          current_value?: number
+          goal_label?: string
+          goal_type?: string
+          id?: string
+          locked_at?: string | null
+          target_value?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_training_schedule: {
         Row: {
           completed: boolean | null

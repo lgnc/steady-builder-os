@@ -1,8 +1,10 @@
-import { Clock, Calendar, Target, Dumbbell, Moon, Car, CalendarClock, Sparkles, Shield } from "lucide-react";
+import { Clock, Calendar, Target, Dumbbell, Moon, Car, CalendarClock, Sparkles, Shield, Crosshair } from "lucide-react";
 import { OnboardingData } from "@/pages/Onboarding";
+import { type EightWeekGoal } from "./EightWeekGoalsStep";
 
 interface ReviewStepProps {
   data: OnboardingData;
+  eightWeekGoals?: EightWeekGoal[];
 }
 
 const programLabels: Record<string, string> = {
@@ -43,7 +45,7 @@ function getDayLabel(day: number): string {
   return strategyDayLabels[day] ?? "Sunday";
 }
 
-export function ReviewStep({ data }: ReviewStepProps) {
+export function ReviewStep({ data, eightWeekGoals = [] }: ReviewStepProps) {
   return (
     <div className="space-y-8">
       <div className="space-y-2">
@@ -245,6 +247,26 @@ export function ReviewStep({ data }: ReviewStepProps) {
             )}
           </div>
         </div>
+
+        {/* 8-Week Goals */}
+        {eightWeekGoals.length > 0 && (
+          <div className="card-ritual">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Crosshair className="h-4 w-4 text-primary" />
+              </div>
+              <h3 className="font-medium">8-Week Goals</h3>
+            </div>
+            <div className="space-y-2 text-sm">
+              {eightWeekGoals.map((goal, idx) => (
+                <div key={idx} className="flex justify-between">
+                  <span className="text-muted-foreground">{goal.goal_label}</span>
+                  <span className="font-medium">Target: {goal.target_value}{["consistency", "habits", "nutrition"].includes(goal.goal_type) ? "%" : ""}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Habits */}
         {(data.habitsBuild.length > 0 || data.habitsBreak.length > 0) && (

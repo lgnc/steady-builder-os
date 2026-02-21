@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { User, LogOut, Calendar, Dumbbell, Moon } from "lucide-react";
+import { User, LogOut, Calendar, Dumbbell, Moon, Target, Lock, Pencil } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -42,6 +42,8 @@ export default function ProfilePage() {
   const [weeklyData, setWeeklyData] = useState<WeeklyData | null>(null);
   const [day28Open, setDay28Open] = useState(false);
   const [day28ResultsOpen, setDay28ResultsOpen] = useState(false);
+  const [eightWeekGoals, setEightWeekGoals] = useState<any[]>([]);
+  const [goalsLocked, setGoalsLocked] = useState(false);
   
   const { user, signOut, loading: authLoading } = useAuth();
   const day28 = useDay28Review(user?.id);
@@ -67,6 +69,26 @@ export default function ProfilePage() {
     };
 
     fetchData();
+  }, [user]);
+
+  useEffect(() => {
+    const fetchGoals = async () => {
+      if (!user) return;
+      const { data } = await supabase
+        .from("user_eight_week_goals")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at");
+      if (data) {
+        setEightWeekGoals(data);
+        const isLocked = data.some((g: any) => {
+          const daysSince = (Date.now() - new Date(g.created_at).getTime()) / 86400000;
+          return daysSince > 7;
+        });
+        setGoalsLocked(isLocked);
+      }
+    };
+    fetchGoals();
   }, [user]);
 
   const handleSignOut = async () => {
@@ -150,6 +172,46 @@ export default function ProfilePage() {
             You're locked into your current structure. No program hopping. Trust the process.
           </p>
         </motion.section>
+
+        {/* 8-Week Goals */}
+        {eightWeekGoals.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="card-ritual"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <Target className="h-5 w-5 text-primary" />
+                <h3 className="font-medium">8-Week Goals</h3>
+              </div>
+              {goalsLocked ? (
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Lock className="h-3 w-3" /> Locked
+                </span>
+              ) : (
+                <button
+                  onClick={() => navigate("/onboarding")}
+                  className="flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <Pencil className="h-3 w-3" /> Edit
+                </button>
+              )}
+            </div>
+            <div className="space-y-2 text-sm">
+              {eightWeekGoals.map((goal: any) => (
+                <div key={goal.id} className="flex justify-between">
+                  <span className="text-muted-foreground">{goal.goal_label}</span>
+                  <span className="font-medium">
+                    Target: {goal.target_value}
+                    {["consistency", "habits", "nutrition"].includes(goal.goal_type) ? "%" : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </motion.section>
+        )}
 
         {/* Weekly Performance */}
         {user && (
