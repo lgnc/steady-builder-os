@@ -98,8 +98,9 @@ export default function WorkoutPage() {
   const weekNumber = parseInt(searchParams.get("week") || "1", 10);
 
   const dateParam = searchParams.get("date");
-  const referenceDate = dateParam ? new Date(dateParam + "T00:00:00") : new Date();
-  const weekStartDate = getWeekStartDate(referenceDate);
+  const scheduledDate = dateParam || new Date().toISOString().split("T")[0];
+  const referenceDate = new Date(scheduledDate + "T00:00:00");
+  const weekStartDate = getWeekStartDate(referenceDate); // informational only
 
   const [trainingDay, setTrainingDay] = useState<TrainingDay | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -146,9 +147,9 @@ export default function WorkoutPage() {
       if (!user || !trainingDayId) return;
 
       setDebugLog([]);
+      addDebug("scheduledDate (identity)", scheduledDate);
       addDebug("dateParam (from URL)", dateParam);
-      addDebug("referenceDate", referenceDate.toISOString());
-      addDebug("computedWeekStartDate", weekStartDate);
+      addDebug("weekStartDate (informational only)", weekStartDate);
       addDebug("training_day_id", trainingDayId);
       addDebug("user_id", user.id);
 
@@ -190,11 +191,12 @@ export default function WorkoutPage() {
       const tier = onboardingRes.data?.experience_tier || "beginner";
       if (onboardingRes.data) setExperienceTier(tier);
 
-      // 2. Upsert session: INSERT ON CONFLICT DO NOTHING, then SELECT
+      // 2. Upsert session by scheduled_date (NOT week_start_date)
       addDebug("SESSION UPSERT query", {
         table: "workout_sessions",
         action: "insert",
-        filters: { user_id: user.id, training_day_id: trainingDayId, week_start_date: weekStartDate },
+        conflict_target: "(user_id, training_day_id, scheduled_date)",
+        filters: { user_id: user.id, training_day_id: trainingDayId, scheduled_date: scheduledDate },
       });
 
       await supabase
@@ -203,17 +205,18 @@ export default function WorkoutPage() {
           user_id: user.id,
           training_day_id: trainingDayId,
           week_start_date: weekStartDate,
+          scheduled_date: scheduledDate,
           status: "in_progress",
         } as any)
         .select()
         .maybeSingle();
 
-      const { data: sessionRow } = await supabase
+      const { data: sessionRow } = await (supabase
         .from("workout_sessions")
         .select("*")
         .eq("user_id", user.id)
-        .eq("training_day_id", trainingDayId)
-        .eq("week_start_date", weekStartDate)
+        .eq("training_day_id", trainingDayId) as any)
+        .eq("scheduled_date", scheduledDate)
         .maybeSingle();
 
       const sessionId = (sessionRow as any)?.id as string | null;
@@ -253,21 +256,21 @@ export default function WorkoutPage() {
         })));
       }
 
-      // 4. Load previous session's sets (for "Prev" column)
+      // 4. Load previous session's sets (for "Prev" column — display only)
       addDebug("PREV SESSION query", {
         table: "workout_sessions",
-        filters: { user_id: user.id, training_day_id: trainingDayId, week_start_date_lt: weekStartDate },
-        order: "week_start_date DESC",
+        filters: { user_id: user.id, training_day_id: trainingDayId, scheduled_date_lt: scheduledDate },
+        order: "scheduled_date DESC",
         limit: 1,
       });
 
-      const { data: prevSession } = await supabase
+      const { data: prevSession } = await (supabase
         .from("workout_sessions")
-        .select("id, week_start_date")
+        .select("id, scheduled_date")
         .eq("user_id", user.id)
-        .eq("training_day_id", trainingDayId)
-        .lt("week_start_date", weekStartDate)
-        .order("week_start_date", { ascending: false })
+        .eq("training_day_id", trainingDayId) as any)
+        .lt("scheduled_date", scheduledDate)
+        .order("scheduled_date", { ascending: false })
         .limit(1)
         .maybeSingle();
 
@@ -331,7 +334,7 @@ export default function WorkoutPage() {
     };
 
     fetchData();
-  }, [user, trainingDayId, weekStartDate]);
+  }, [user, trainingDayId, scheduledDate]);
 
   const getSetCountForTier = (exercise: Exercise, tier: string): number => {
     switch (tier) {
@@ -646,9 +649,9 @@ export default function WorkoutPage() {
           <div className="fixed inset-x-0 top-8 z-50 mx-2 max-h-[50vh] overflow-auto bg-card border border-border rounded-lg p-3 shadow-lg">
             <div className="text-[10px] font-mono space-y-0.5 text-foreground">
               <div className="font-bold text-primary mb-1">Workout Debug Panel</div>
+              <div><span className="text-muted-foreground">scheduledDate:</span> <span className="font-bold">{scheduledDate}</span></div>
               <div><span className="text-muted-foreground">sessionId:</span> {currentSessionId?.slice(0, 8) || "null"}</div>
-              <div><span className="text-muted-foreground">weekStartDate:</span> {weekStartDate}</div>
-              <div><span className="text-muted-foreground">dateParam:</span> {dateParam || "null"}</div>
+              <div><span className="text-muted-foreground">weekStartDate (info only):</span> <span className="opacity-50">{weekStartDate}</span></div>
               <div><span className="text-muted-foreground">trainingDayId:</span> {trainingDayId?.slice(0, 8)}</div>
               <div><span className="text-muted-foreground">currentSets:</span> {currentSets.length}</div>
               <div><span className="text-muted-foreground">previousSets:</span> {previousSets.length}</div>
