@@ -1,54 +1,45 @@
 
 
-# Fix: TrainingBlockSheet Always Passes Today's Date
+# Fix: Nutrition Calendar Showing Stale Week
 
-## Root Cause
+## Problem
 
-When you navigate to Feb 23 on the Dashboard and click "Start Workout," the `TrainingBlockSheet` component hardcodes `new Date()` (today = Feb 17) as the date parameter:
+The Nutrition tab's day selector always shows the week from when the meal plan was generated (Feb 9). It uses `plan.week_start` (a static stored date) instead of the current week's dates.
 
-```text
-const today = new Date().toISOString().split("T")[0];  // always "2026-02-17"
-navigate(`/workout/${block.training_day_id}?date=${today}`);
-```
-
-This means `Workout.tsx` computes `weekStartDate = 2026-02-16` (this week's Monday) and loads this week's logs -- showing pre-filled data instead of a blank session.
-
-The same bug exists in `Training.tsx`, which also hardcodes `new Date()`.
+The meal plan data has 7 generic days (day 1-7) with meals. These should map to whatever the current week is, not the original generation week.
 
 ## Fix
 
-### 1. `TrainingBlockSheet.tsx`
+In `src/pages/Nutrition.tsx`, replace the static `plan.week_start` with the current week's Monday date computed via `getWeekStartDate(new Date())`.
 
-Accept a `selectedDate` prop (string, "YYYY-MM-DD") and use it instead of `new Date()`:
+This affects two places where `weekStart` is passed:
+1. `DailyPlanView` (line 291) -- controls the day selector dates
+2. `WeeklyOverview` (line 307) -- controls the weekly overview dates
+
+### Change in `src/pages/Nutrition.tsx`
 
 ```text
-// Before:
-const today = new Date().toISOString().split("T")[0];
-navigate(`/workout/${block.training_day_id}?date=${today}`);
+// Add import
+import { getWeekStartDate } from "@/lib/weekUtils";
 
-// After:
-navigate(`/workout/${block.training_day_id}?date=${selectedDate}`);
+// Compute current week start
+const currentWeekStart = getWeekStartDate(new Date());
+
+// Pass currentWeekStart instead of plan.week_start to both components
+<DailyPlanView weekStart={currentWeekStart} ... />
+<WeeklyOverview weekStart={currentWeekStart} ... />
 ```
-
-### 2. `Dashboard.tsx`
-
-Pass the currently selected date from Dashboard to TrainingBlockSheet as a prop. The Dashboard already has `selectedDate` state -- format it as "YYYY-MM-DD" and thread it through.
-
-### 3. `Training.tsx`
-
-Change the hardcoded `new Date()` to use a properly computed date. Since Training.tsx shows "today's" program, this can stay as `format(new Date(), "yyyy-MM-dd")` -- but if we want consistency, pass the correct date context.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `src/components/calendar/TrainingBlockSheet.tsx` | Add `selectedDate` prop; use it in navigation URL instead of `new Date()` |
-| `src/pages/Dashboard.tsx` | Pass formatted `selectedDate` to `TrainingBlockSheet` |
-| `src/pages/Training.tsx` | No change needed (it correctly shows today's program only) |
+| `src/pages/Nutrition.tsx` | Import `getWeekStartDate`, pass current week's Monday instead of `plan.week_start` |
 
 ## What This Fixes
 
-- Navigating to Feb 23 on Dashboard and clicking "Start Workout" will pass `?date=2026-02-23`, computing `weekStartDate = 2026-02-23`, which finds zero logs -- showing a blank workout
-- Current week's workout remains unaffected
-- Historical data preserved
+- Day selector shows current week dates (Feb 16-22 this week)
+- "Today" highlight works correctly
+- Meal completions are dated to the correct current dates
+- Next week the dates will automatically advance
 
