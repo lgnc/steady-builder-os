@@ -124,13 +124,10 @@ export default function WorkoutPage() {
     weeklyCompleted: 0,
     weeklyTotal: 0,
   });
-  const [showDebug, setShowDebug] = useState(false);
-  const [debugLog, setDebugLog] = useState<string[]>([]);
-
   const addDebug = (label: string, value: any) => {
     const msg = `[WO-DEBUG] ${label}: ${typeof value === "object" ? JSON.stringify(value, null, 2) : value}`;
     console.log(msg);
-    setDebugLog((prev) => [...prev, `${new Date().toISOString().slice(11, 19)} ${label}: ${typeof value === "object" ? JSON.stringify(value) : value}`]);
+  };
   };
 
   const { user, loading: authLoading } = useAuth();
@@ -147,7 +144,7 @@ export default function WorkoutPage() {
     const fetchData = async () => {
       if (!user || !trainingDayId) return;
 
-      setDebugLog([]);
+      // Debug logging (console only)
       addDebug("scheduledDate (identity)", scheduledDate);
       addDebug("scheduledWorkoutId (from URL)", scheduledWorkoutId);
       addDebug("dateParam (from URL)", dateParam);
@@ -604,20 +601,24 @@ export default function WorkoutPage() {
       }
 
       // Mark session as completed
-      await supabase
+      const { error: sessionError } = await supabase
         .from("workout_sessions")
         .update({ status: "completed", performed_at: new Date().toISOString() } as any)
         .eq("id", currentSessionId);
+      
+      if (sessionError) {
+        console.error("[WO] session update error:", sessionError);
+        throw sessionError;
+      }
 
       // Mark scheduled_workout as completed
       if (scheduledWorkoutId) {
-        await supabase
+        const { error: swError } = await supabase
           .from("scheduled_workouts" as any)
           .update({ status: "completed", completed_at: new Date().toISOString() } as any)
           .eq("id", scheduledWorkoutId);
-        addDebug("scheduled_workout marked completed", scheduledWorkoutId);
+        if (swError) console.error("[WO] scheduled_workout update error:", swError);
       } else {
-        // Fallback: find by session linkage
         await (supabase
           .from("scheduled_workouts" as any)
           .update({ status: "completed", completed_at: new Date().toISOString() } as any)
@@ -666,7 +667,8 @@ export default function WorkoutPage() {
         title: "Workout complete 💪",
         description: "Your progress has been saved.",
       });
-    } catch {
+    } catch (err) {
+      console.error("[WO] completeWorkout error:", err);
       toast({
         title: "Error",
         description: "Failed to save workout. Please try again.",
@@ -704,32 +706,6 @@ export default function WorkoutPage() {
   return (
     <MobileLayout>
       <div className="flex flex-col h-full">
-        {/* Debug Panel Toggle */}
-        <button
-          onClick={() => setShowDebug((v) => !v)}
-          className="fixed top-2 right-2 z-50 bg-destructive text-destructive-foreground text-[10px] px-2 py-1 rounded font-mono"
-        >
-          {showDebug ? "Hide Debug" : "🐛 Debug"}
-        </button>
-
-        {showDebug && (
-          <div className="fixed inset-x-0 top-8 z-50 mx-2 max-h-[50vh] overflow-auto bg-card border border-border rounded-lg p-3 shadow-lg">
-            <div className="text-[10px] font-mono space-y-0.5 text-foreground">
-              <div className="font-bold text-primary mb-1">Workout Debug Panel</div>
-              <div><span className="text-muted-foreground">scheduledDate:</span> <span className="font-bold">{scheduledDate}</span></div>
-              <div><span className="text-muted-foreground">scheduledWorkoutId:</span> <span className="font-bold">{scheduledWorkoutId?.slice(0, 8) || "null"}</span></div>
-              <div><span className="text-muted-foreground">sessionId:</span> {currentSessionId?.slice(0, 8) || "null"}</div>
-              <div><span className="text-muted-foreground">weekStartDate (info only):</span> <span className="opacity-50">{weekStartDate}</span></div>
-              <div><span className="text-muted-foreground">trainingDayId:</span> {trainingDayId?.slice(0, 8)}</div>
-              <div><span className="text-muted-foreground">currentSets:</span> {currentSets.length}</div>
-              <div><span className="text-muted-foreground">previousSets:</span> {previousSets.length}</div>
-              <hr className="border-border my-1" />
-              {debugLog.map((line, i) => (
-                <div key={i} className={line.includes("✅") ? "text-green-500" : line.includes("❌") ? "text-destructive" : ""}>{line}</div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Header */}
         <div className="px-6 py-4 border-b border-border/50 shrink-0">
@@ -1038,3 +1014,4 @@ export default function WorkoutPage() {
     </MobileLayout>
   );
 }
+
