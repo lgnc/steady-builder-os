@@ -1,49 +1,42 @@
 
 
-# Sliding Scale Goals in Onboarding Step 9
+# Fix: Weekly Workout Data Isolation
 
-## Overview
+## Problem
 
-Replace the static preset buttons for Weight Loss, Bench Press, Squat, Deadlift, and Pull-ups with slider controls so users can dial in their exact target. Consistency, Habits, and Nutrition stay as preset button selections (80% / 90%).
+Two issues are causing the "stale data" experience:
 
-## Changes
+1. **Warm-up gate locks ALL inputs** -- When you re-open a workout, the warm-up is unchecked (it's not persisted), which locks all the weight/reps inputs behind a warm-up wall. This makes already-logged data appear "greyed out and uneditable" even though the data belongs to the correct week.
 
-### File: `src/components/onboarding/EightWeekGoalsStep.tsx`
+2. **Duplicate workout logs** -- There are 2 identical log entries for the same exercise/set in the database, likely from a double-tap or race condition during saving.
 
-**1. Update the data model for goal categories**
+3. **Onboarding doesn't clean up workout_logs** -- When re-running onboarding and switching programs, old workout_logs from the previous program remain in the database. These can cause confusion if training_day_ids are reused.
 
-Split categories into two types:
-- **Slider categories** (weight_loss, bench_press, squat, deadlift, pull_ups) -- each gets a `min`, `max`, `step`, and `unit` instead of `presets`
-- **Preset categories** (consistency, habits, nutrition) -- keep the existing button-based selection
+## Plan
 
-```text
-Slider configs:
-- Weight Loss:   1kg - 20kg,   step 0.5,  label "Lose {value}kg"
-- Bench Press:   60kg - 300kg, step 5,    label "Bench {value}kg"
-- Squat:         60kg - 300kg, step 5,    label "Squat {value}kg"
-- Deadlift:      60kg - 300kg, step 5,    label "Deadlift {value}kg"
-- Pull-ups:      1 - 20,      step 1,    label "{value} pull-ups"
-```
+### Step 1: Clean up duplicate workout_logs in the database
+Delete the duplicate log entry so only one remains per exercise/set/week.
 
-**2. Update the UI for slider categories**
+### Step 2: Fix warm-up gate for returning sessions
+Change the lock logic so that if the user already has saved sets for the current week (i.e., they're returning to a workout they started), the warm-up gate is bypassed. The warm-up only gates brand-new sessions.
 
-When a user taps a slider category to add it:
-- Show the category row with a Radix `Slider` component
-- Display the current value prominently next to the slider
-- An "Add" button confirms the selection and adds it to goals
-- Uses the existing `src/components/ui/slider.tsx` component
+### Step 3: Add workout_logs cleanup to onboarding
+In `src/pages/Onboarding.tsx`, add a delete of `workout_logs` in the `generateSchedule` function alongside the other cleanup queries. This ensures a fresh start when re-onboarding.
 
-**3. Preset categories remain unchanged**
+### Step 4: Prevent duplicate log inserts
+In the `saveSet` function in `src/pages/Workout.tsx`, re-check for existing logs right before inserting to prevent race conditions from double-taps creating duplicates.
 
-Consistency, Habits, and Nutrition keep their current button-based UI with 80%/90% options.
+---
 
-**4. Selected goals display**
+### Technical Details
 
-No changes to the selected goals section at the top -- it already shows the label and an X to remove.
+**File: `src/pages/Workout.tsx`**
+- Modify the `isLocked` logic (line 515): if `currentLogs.length > 0`, skip the warm-up gate (the user is resuming a started workout)
+- In `saveSet` (lines 297-363): add a guard to check for existing logs before inserting, preventing duplicate entries
 
-## Technical Details
+**File: `src/pages/Onboarding.tsx`**
+- In `generateSchedule`: add `await supabase.from("workout_logs").delete().eq("user_id", user.id)` to the cleanup block
 
-- Import `Slider` from `@/components/ui/slider`
-- Add a `useState` for tracking which slider category is currently being configured and its draft value
-- Generate the `goal_label` dynamically from the slider value (e.g., slider at 75 for bench = "Bench 75kg")
-- No database or other file changes needed -- the goal data shape (`goal_type`, `goal_label`, `target_value`) stays the same
+**Database cleanup**
+- Delete the duplicate workout_log entry for the current user
+
