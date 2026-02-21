@@ -848,6 +848,30 @@ export type Database = {
           },
         ]
       }
+      weekly_review_summaries: {
+        Row: {
+          created_at: string
+          id: string
+          summary_text: string
+          user_id: string
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          summary_text: string
+          user_id: string
+          week_start: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          summary_text?: string
+          user_id?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
       workout_logs: {
         Row: {
           created_at: string
