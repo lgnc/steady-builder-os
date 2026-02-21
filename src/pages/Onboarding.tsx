@@ -305,6 +305,9 @@ export default function OnboardingPage() {
   const saveEightWeekGoals = async () => {
     if (!user || eightWeekGoals.length === 0) return;
 
+    // Delete existing goals first to prevent duplicates on re-onboarding
+    await supabase.from("user_eight_week_goals").delete().eq("user_id", user.id);
+
     const rows = eightWeekGoals.map((g) => ({
       user_id: user.id,
       goal_type: g.goal_type,
@@ -319,6 +322,9 @@ export default function OnboardingPage() {
 
   const seedHabits = async () => {
     if (!user) return;
+
+    // Delete existing habits first to prevent duplicates on re-onboarding
+    await supabase.from("habits").delete().eq("user_id", user.id);
 
     const buildHabits = data.habitsBuild.map((title, idx) => ({
       user_id: user.id,
