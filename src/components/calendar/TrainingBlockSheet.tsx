@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
-import { Dumbbell, CalendarClock, ArrowLeft, Check, AlertCircle } from "lucide-react";
+import { Dumbbell, CalendarClock, ArrowLeft, Check, AlertCircle, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Sheet,
@@ -49,8 +49,25 @@ export function TrainingBlockSheet({
   const [view, setView] = useState<"details" | "reschedule">("details");
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [rescheduleType, setRescheduleType] = useState<"this_week" | "permanent">("this_week");
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Generate time slots from 5:00 to 21:00 in 15-min increments
+  const timeSlots = useMemo(() => {
+    const slots: string[] = [];
+    for (let h = 5; h <= 21; h++) {
+      for (let m = 0; m < 60; m += 15) {
+        slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+      }
+    }
+    return slots;
+  }, []);
+
+  // Calculate block duration in minutes
+  const blockDurationMin = block
+    ? parseTimeToMinutes(block.end_time) - parseTimeToMinutes(block.start_time)
+    : 0;
 
   if (!block) return null;
 
@@ -68,6 +85,7 @@ export function TrainingBlockSheet({
   const handleOpenReschedule = () => {
     setView("reschedule");
     setSelectedDay(null);
+    setSelectedTime(null);
     setRescheduleType("this_week");
     setError(null);
   };
@@ -75,11 +93,19 @@ export function TrainingBlockSheet({
   const handleBack = () => {
     setView("details");
     setSelectedDay(null);
+    setSelectedTime(null);
     setError(null);
   };
 
   const handleConfirmReschedule = async () => {
     if (selectedDay === null || selectedDay === block.day_of_week) return;
+    // For permanent changes with a time selected, compute new times
+    const useNewTime = rescheduleType === "permanent" && selectedTime !== null;
+    const newStartTime = useNewTime ? selectedTime : block.start_time;
+    const newEndMinutes = parseTimeToMinutes(newStartTime) + blockDurationMin;
+    const newEndTime = useNewTime
+      ? `${String(Math.floor(newEndMinutes / 60)).padStart(2, "0")}:${String(newEndMinutes % 60).padStart(2, "0")}`
+      : block.end_time;
 
     setSaving(true);
     setError(null);
@@ -96,12 +122,20 @@ export function TrainingBlockSheet({
       const linkedIds = [block.id, ...linkedCommutes.map((c) => c.id)];
       const movedBlocks = [block, ...linkedCommutes];
 
+      // For overlap checking, use new times if permanent+time change
+      const movedBlocksWithTimes = movedBlocks.map((moved) => {
+        if (moved.id === block.id && useNewTime) {
+          return { ...moved, start_time: newStartTime, end_time: newEndTime };
+        }
+        return moved;
+      });
+
       // Check for time overlaps on the target day
       const targetDayBlocks = blocks.filter(
         (b) => b.day_of_week === selectedDay && b.block_type !== "sleep"
       );
 
-      const hasOverlap = movedBlocks.some((moved) => {
+      const hasOverlap = movedBlocksWithTimes.some((moved) => {
         const mStart = parseTimeToMinutes(moved.start_time);
         const mEnd = parseTimeToMinutes(moved.end_time);
         return targetDayBlocks.some((other) => {
@@ -136,12 +170,20 @@ export function TrainingBlockSheet({
         onOverrideAdded?.();
       } else {
         // Permanent change: update schedule_blocks directly
-        const blockUpdates = linkedIds.map((id) =>
-          supabase
+        const updatePayload: Record<string, any> = { day_of_week: selectedDay };
+        if (useNewTime) {
+          updatePayload.start_time = newStartTime;
+          updatePayload.end_time = newEndTime;
+        }
+
+        const blockUpdates = linkedIds.map((id) => {
+          // Only apply time changes to the training block itself, not commutes
+          const payload = id === block.id ? updatePayload : { day_of_week: selectedDay };
+          return supabase
             .from("schedule_blocks")
-            .update({ day_of_week: selectedDay })
-            .eq("id", id)
-        );
+            .update(payload)
+            .eq("id", id);
+        });
 
         // Update user_training_schedule
         const scheduleUpdate = block.training_day_id
@@ -155,9 +197,13 @@ export function TrainingBlockSheet({
         await Promise.all([...blockUpdates, ...(scheduleUpdate ? [scheduleUpdate] : [])]);
 
         // Update local state
-        const updatedBlocks = blocks.map((b) =>
-          linkedIds.includes(b.id) ? { ...b, day_of_week: selectedDay } : b
-        );
+        const updatedBlocks = blocks.map((b) => {
+          if (!linkedIds.includes(b.id)) return b;
+          if (b.id === block.id && useNewTime) {
+            return { ...b, day_of_week: selectedDay, start_time: newStartTime, end_time: newEndTime };
+          }
+          return { ...b, day_of_week: selectedDay };
+        });
 
         onRescheduleComplete(updatedBlocks);
       }
@@ -175,6 +221,7 @@ export function TrainingBlockSheet({
     if (!open) {
       setView("details");
       setSelectedDay(null);
+      setSelectedTime(null);
       setError(null);
     }
     onOpenChange(open);
@@ -340,6 +387,48 @@ export function TrainingBlockSheet({
                       <p className="text-xs text-muted-foreground">Move permanently to {DAY_LABELS[selectedDay]}</p>
                     </div>
                   </button>
+
+                  {/* Time picker for permanent changes */}
+                  {rescheduleType === "permanent" && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="mt-3 p-3 rounded-lg border border-border bg-card"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <p className="text-sm font-medium text-foreground">New time (optional)</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Currently {formatTimeShort(block.start_time)} – {formatTimeShort(block.end_time)} ({blockDurationMin} min)
+                      </p>
+                      <div className="grid grid-cols-4 gap-1.5 max-h-32 overflow-y-auto">
+                        {timeSlots.map((slot) => {
+                          const endMin = parseTimeToMinutes(slot) + blockDurationMin;
+                          if (endMin > 23 * 60) return null; // Don't allow sessions ending past 11pm
+                          const isCurrentTime = slot === block.start_time;
+                          const isSelected = selectedTime === slot;
+                          return (
+                            <button
+                              key={slot}
+                              onClick={() => {
+                                setSelectedTime(isSelected ? null : slot);
+                                setError(null);
+                              }}
+                              className={cn(
+                                "py-1.5 rounded-md text-xs font-medium transition-all border",
+                                isSelected && "bg-primary border-primary text-primary-foreground",
+                                isCurrentTime && !isSelected && "border-primary/40 text-primary",
+                                !isSelected && !isCurrentTime && "border-border bg-background hover:border-primary/50 text-foreground"
+                              )}
+                            >
+                              {formatTimeShort(slot)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
                 </motion.div>
               )}
 
