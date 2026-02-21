@@ -1,5 +1,7 @@
-import { Target, Plus, X } from "lucide-react";
+import { useState } from "react";
+import { Target, Plus, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Slider } from "@/components/ui/slider";
 import { OnboardingData } from "@/pages/Onboarding";
 
 export interface EightWeekGoal {
@@ -14,68 +16,95 @@ interface EightWeekGoalsStepProps {
   data: OnboardingData;
 }
 
-interface GoalCategory {
+interface SliderCategory {
   type: string;
   label: string;
   icon: string;
+  kind: "slider";
+  min: number;
+  max: number;
+  step: number;
+  unit: string;
+  labelTemplate: (v: number) => string;
+  defaultValue: number;
+}
+
+interface PresetCategory {
+  type: string;
+  label: string;
+  icon: string;
+  kind: "preset";
   presets: { label: string; value: number }[];
 }
+
+type GoalCategory = SliderCategory | PresetCategory;
 
 const GOAL_CATEGORIES: GoalCategory[] = [
   {
     type: "weight_loss",
     label: "Weight Loss",
     icon: "⚖️",
-    presets: [
-      { label: "Lose 3kg", value: 3 },
-      { label: "Lose 5kg", value: 5 },
-      { label: "Lose 8kg", value: 8 },
-    ],
+    kind: "slider",
+    min: 1,
+    max: 20,
+    step: 0.5,
+    unit: "kg",
+    labelTemplate: (v) => `Lose ${v}kg`,
+    defaultValue: 5,
   },
   {
     type: "bench_press",
     label: "Bench Press",
     icon: "🏋️",
-    presets: [
-      { label: "Bench 80kg", value: 80 },
-      { label: "Bench 100kg", value: 100 },
-      { label: "Bench 120kg", value: 120 },
-    ],
+    kind: "slider",
+    min: 60,
+    max: 300,
+    step: 5,
+    unit: "kg",
+    labelTemplate: (v) => `Bench ${v}kg`,
+    defaultValue: 100,
   },
   {
     type: "squat",
     label: "Squat",
     icon: "🦵",
-    presets: [
-      { label: "Squat 100kg", value: 100 },
-      { label: "Squat 120kg", value: 120 },
-      { label: "Squat 140kg", value: 140 },
-    ],
+    kind: "slider",
+    min: 60,
+    max: 300,
+    step: 5,
+    unit: "kg",
+    labelTemplate: (v) => `Squat ${v}kg`,
+    defaultValue: 120,
   },
   {
     type: "deadlift",
     label: "Deadlift",
     icon: "💪",
-    presets: [
-      { label: "Deadlift 120kg", value: 120 },
-      { label: "Deadlift 140kg", value: 140 },
-      { label: "Deadlift 180kg", value: 180 },
-    ],
+    kind: "slider",
+    min: 60,
+    max: 300,
+    step: 5,
+    unit: "kg",
+    labelTemplate: (v) => `Deadlift ${v}kg`,
+    defaultValue: 140,
   },
   {
     type: "pull_ups",
     label: "Pull-ups",
     icon: "🤸",
-    presets: [
-      { label: "5 pull-ups", value: 5 },
-      { label: "8 pull-ups", value: 8 },
-      { label: "10 pull-ups", value: 10 },
-    ],
+    kind: "slider",
+    min: 1,
+    max: 20,
+    step: 1,
+    unit: "reps",
+    labelTemplate: (v) => `${v} pull-ups`,
+    defaultValue: 8,
   },
   {
     type: "consistency",
     label: "Training Consistency",
     icon: "🔥",
+    kind: "preset",
     presets: [
       { label: "80% sessions completed", value: 80 },
       { label: "90% sessions completed", value: 90 },
@@ -85,6 +114,7 @@ const GOAL_CATEGORIES: GoalCategory[] = [
     type: "habits",
     label: "Habit Completion",
     icon: "✅",
+    kind: "preset",
     presets: [
       { label: "80% habit completion", value: 80 },
       { label: "90% habit completion", value: 90 },
@@ -94,6 +124,7 @@ const GOAL_CATEGORIES: GoalCategory[] = [
     type: "nutrition",
     label: "Nutrition Adherence",
     icon: "🥗",
+    kind: "preset",
     presets: [
       { label: "80% nutrition targets", value: 80 },
       { label: "90% nutrition targets", value: 90 },
@@ -102,18 +133,26 @@ const GOAL_CATEGORIES: GoalCategory[] = [
 ];
 
 export function EightWeekGoalsStep({ goals, onGoalsChange, data }: EightWeekGoalsStepProps) {
-  const addGoal = (category: GoalCategory, preset: { label: string; value: number }) => {
+  const [activeSlider, setActiveSlider] = useState<string | null>(null);
+  const [draftValue, setDraftValue] = useState<number>(0);
+
+  const addGoal = (goalType: string, goalLabel: string, targetValue: number) => {
     if (goals.length >= 3) return;
-    // Don't add duplicate types
-    if (goals.some((g) => g.goal_type === category.type)) return;
+    if (goals.some((g) => g.goal_type === goalType)) return;
     onGoalsChange([
       ...goals,
-      { goal_type: category.type, goal_label: preset.label, target_value: preset.value },
+      { goal_type: goalType, goal_label: goalLabel, target_value: targetValue },
     ]);
+    setActiveSlider(null);
   };
 
   const removeGoal = (index: number) => {
     onGoalsChange(goals.filter((_, i) => i !== index));
+  };
+
+  const openSlider = (category: SliderCategory) => {
+    setActiveSlider(category.type);
+    setDraftValue(category.defaultValue);
   };
 
   const selectedTypes = new Set(goals.map((g) => g.goal_type));
@@ -161,11 +200,41 @@ export function EightWeekGoalsStep({ goals, onGoalsChange, data }: EightWeekGoal
                 <span>{category.icon}</span>
                 <span className="text-sm font-medium">{category.label}</span>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {category.presets.map((preset) => (
+
+              {category.kind === "slider" ? (
+                activeSlider === category.type ? (
+                  <div className="p-4 rounded-lg border border-border bg-muted/20 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg font-semibold">
+                        {category.labelTemplate(draftValue)}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        {draftValue} {category.unit}
+                      </span>
+                    </div>
+                    <Slider
+                      value={[draftValue]}
+                      onValueChange={([v]) => setDraftValue(v)}
+                      min={category.min}
+                      max={category.max}
+                      step={category.step}
+                      className="w-full"
+                    />
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{category.min} {category.unit}</span>
+                      <span>{category.max} {category.unit}</span>
+                    </div>
+                    <button
+                      onClick={() => addGoal(category.type, category.labelTemplate(draftValue), draftValue)}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+                    >
+                      <Check className="h-4 w-4" />
+                      Add Goal
+                    </button>
+                  </div>
+                ) : (
                   <button
-                    key={preset.label}
-                    onClick={() => addGoal(category, preset)}
+                    onClick={() => openSlider(category)}
                     className={cn(
                       "px-3 py-2 rounded-lg text-sm border transition-all duration-200",
                       "bg-muted/30 border-border hover:bg-muted/50 hover:border-primary/30"
@@ -173,11 +242,29 @@ export function EightWeekGoalsStep({ goals, onGoalsChange, data }: EightWeekGoal
                   >
                     <span className="flex items-center gap-1.5">
                       <Plus className="h-3 w-3" />
-                      {preset.label}
+                      Set target
                     </span>
                   </button>
-                ))}
-              </div>
+                )
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {category.presets.map((preset) => (
+                    <button
+                      key={preset.label}
+                      onClick={() => addGoal(category.type, preset.label, preset.value)}
+                      className={cn(
+                        "px-3 py-2 rounded-lg text-sm border transition-all duration-200",
+                        "bg-muted/30 border-border hover:bg-muted/50 hover:border-primary/30"
+                      )}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Plus className="h-3 w-3" />
+                        {preset.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
