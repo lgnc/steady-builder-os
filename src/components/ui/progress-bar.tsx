@@ -5,11 +5,12 @@ interface ProgressBarProps {
   value: number;
   max?: number;
   className?: string;
+  fillClassName?: string;
   showLabel?: boolean;
 }
 
 const ProgressBar = React.forwardRef<HTMLDivElement, ProgressBarProps>(
-  ({ value, max = 100, className, showLabel = false }, ref) => {
+  ({ value, max = 100, className, fillClassName, showLabel = false }, ref) => {
     const percentage = Math.min(100, Math.max(0, (value / max) * 100));
 
     return (
@@ -22,7 +23,7 @@ const ProgressBar = React.forwardRef<HTMLDivElement, ProgressBarProps>(
         )}
         <div className="progress-bar">
           <div
-            className="progress-bar-fill"
+            className={cn("progress-bar-fill", fillClassName)}
             style={{ width: `${percentage}%` }}
           />
         </div>
