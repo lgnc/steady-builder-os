@@ -50,14 +50,15 @@ interface Exercise {
   form_cues: string[];
 }
 
-interface WorkoutLog {
+interface WorkoutSet {
   id: string;
-  exercise_id: string;
-  set_number: number;
+  session_id: string;
+  training_exercise_id: string;
+  set_index: number;
   weight_kg: number | null;
-  reps_completed: number | null;
-  duration_seconds?: number | null;
-  week_number: number;
+  reps: number | null;
+  duration_seconds: number | null;
+  notes: string | null;
 }
 
 interface SetInput {
@@ -79,7 +80,6 @@ const getPrescriptionType = (reps: string): "duration" | "reps" => {
 
 const parsePrescribedSeconds = (reps: string): number | null => {
   const lower = reps.toLowerCase();
-  // Match patterns like "30 sec", "45-60 sec", "2 min", "1-2 min"
   const secMatch = lower.match(/(\d+)[\s-]*sec/);
   const rangeSecMatch = lower.match(/(\d+)\s*-\s*(\d+)\s*sec/);
   const minMatch = lower.match(/(\d+)[\s-]*min/);
@@ -97,22 +97,16 @@ export default function WorkoutPage() {
   const [searchParams] = useSearchParams();
   const weekNumber = parseInt(searchParams.get("week") || "1", 10);
 
-  // Week-scoped instance: compute week_start_date from ?date param or today
   const dateParam = searchParams.get("date");
   const referenceDate = dateParam ? new Date(dateParam + "T00:00:00") : new Date();
   const weekStartDate = getWeekStartDate(referenceDate);
-  const prevWeekStartDate = (() => {
-    const d = new Date(referenceDate);
-    d.setDate(d.getDate() - 7);
-    return getWeekStartDate(d);
-  })();
 
   const [trainingDay, setTrainingDay] = useState<TrainingDay | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [experienceTier, setExperienceTier] = useState("beginner");
-  const [previousLogs, setPreviousLogs] = useState<WorkoutLog[]>([]);
-  const [currentLogs, setCurrentLogs] = useState<WorkoutLog[]>([]);
-  const [allTimeLogs, setAllTimeLogs] = useState<WorkoutLog[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentSets, setCurrentSets] = useState<WorkoutSet[]>([]);
+  const [previousSets, setPreviousSets] = useState<WorkoutSet[]>([]);
   const [setInputs, setSetInputs] = useState<Record<string, SetInput[]>>({});
   const [expandedExercise, setExpandedExercise] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -143,39 +137,20 @@ export default function WorkoutPage() {
     const fetchData = async () => {
       if (!user || !trainingDayId) return;
 
-      const [dayRes, exercisesRes, onboardingRes, currentLogsRes, prevLogsRes, scheduleRes] =
-        await Promise.all([
-          supabase.from("training_days").select("*").eq("id", trainingDayId).maybeSingle(),
-          supabase
-            .from("training_exercises")
-            .select("*")
-            .eq("training_day_id", trainingDayId)
-            .order("exercise_order"),
-          supabase
-            .from("onboarding_data")
-            .select("experience_tier")
-            .eq("user_id", user.id)
-            .maybeSingle(),
-          supabase
-            .from("workout_logs")
-            .select("*")
-            .eq("user_id", user.id)
-            .eq("training_day_id", trainingDayId)
-            .eq("week_start_date", weekStartDate),
-          supabase
-            .from("workout_logs")
-            .select("*")
-            .eq("user_id", user.id)
-            .eq("training_day_id", trainingDayId)
-            .eq("week_start_date", prevWeekStartDate),
-          supabase
-            .from("user_training_schedule")
-            .select("completed")
-            .eq("user_id", user.id)
-            .eq("training_day_id", trainingDayId)
-            .eq("week_start_date", weekStartDate)
-            .maybeSingle(),
-        ]);
+      // 1. Fetch template data + onboarding in parallel
+      const [dayRes, exercisesRes, onboardingRes] = await Promise.all([
+        supabase.from("training_days").select("*").eq("id", trainingDayId).maybeSingle(),
+        supabase
+          .from("training_exercises")
+          .select("*")
+          .eq("training_day_id", trainingDayId)
+          .order("exercise_order"),
+        supabase
+          .from("onboarding_data")
+          .select("experience_tier")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+      ]);
 
       if (dayRes.data) {
         const day = dayRes.data as any;
@@ -197,41 +172,85 @@ export default function WorkoutPage() {
       }));
       setExercises(mappedExercises);
 
-      if (onboardingRes.data) setExperienceTier(onboardingRes.data.experience_tier || "beginner");
-      if (currentLogsRes.data) setCurrentLogs(currentLogsRes.data);
-      if (prevLogsRes.data) setPreviousLogs(prevLogsRes.data);
-      if (scheduleRes.data?.completed) setWorkoutCompleted(true);
+      const tier = onboardingRes.data?.experience_tier || "beginner";
+      if (onboardingRes.data) setExperienceTier(tier);
 
-      // Fetch all-time logs for PB detection
-      if (mappedExercises.length > 0) {
-        const exerciseIds = mappedExercises.map((ex) => ex.id);
-        const { data: allLogs } = await supabase
-          .from("workout_logs")
-          .select("*")
-          .eq("user_id", user.id)
-          .in("exercise_id", exerciseIds);
-        if (allLogs) setAllTimeLogs(allLogs);
+      // 2. Upsert session: INSERT ON CONFLICT DO NOTHING, then SELECT
+      await supabase
+        .from("workout_sessions")
+        .insert({
+          user_id: user.id,
+          training_day_id: trainingDayId,
+          week_start_date: weekStartDate,
+          status: "in_progress",
+        } as any)
+        .select()
+        .maybeSingle();
+
+      const { data: sessionRow } = await supabase
+        .from("workout_sessions")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("training_day_id", trainingDayId)
+        .eq("week_start_date", weekStartDate)
+        .maybeSingle();
+
+      const sessionId = (sessionRow as any)?.id as string | null;
+      const sessionStatus = (sessionRow as any)?.status as string | undefined;
+      setCurrentSessionId(sessionId);
+
+      if (sessionStatus === "completed") {
+        setWorkoutCompleted(true);
       }
 
-      // Initialize set inputs
+      // 3. Load current session's sets
+      let loadedSets: WorkoutSet[] = [];
+      if (sessionId) {
+        const { data: setsData } = await supabase
+          .from("workout_sets")
+          .select("*")
+          .eq("session_id", sessionId);
+        loadedSets = (setsData || []) as any[];
+        setCurrentSets(loadedSets);
+      }
+
+      // 4. Load previous session's sets (for "Prev" column)
+      const { data: prevSession } = await supabase
+        .from("workout_sessions")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("training_day_id", trainingDayId)
+        .lt("week_start_date", weekStartDate)
+        .order("week_start_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (prevSession) {
+        const { data: prevSetsData } = await supabase
+          .from("workout_sets")
+          .select("*")
+          .eq("session_id", (prevSession as any).id);
+        setPreviousSets((prevSetsData || []) as any[]);
+      }
+
+      // 5. Initialize set inputs from current session's sets ONLY
       if (exerciseData.length > 0) {
-        const tier = onboardingRes.data?.experience_tier || "beginner";
         const inputs: Record<string, SetInput[]> = {};
 
         mappedExercises.forEach((ex) => {
           const setCount = getSetCountForTier(ex, tier);
-          const existingLogs = (currentLogsRes.data || []).filter(
-            (l: WorkoutLog) => l.exercise_id === ex.id
+          const existingSets = loadedSets.filter(
+            (s) => s.training_exercise_id === ex.id
           );
           const isDuration = getPrescriptionType(ex.reps) === "duration";
 
           inputs[ex.id] = Array.from({ length: setCount }, (_, i) => {
-            const log = existingLogs.find((l: WorkoutLog) => l.set_number === i + 1);
+            const ws = existingSets.find((s) => s.set_index === i + 1);
             return {
-              weight: log?.weight_kg?.toString() || "",
-              reps: log?.reps_completed?.toString() || "",
-              duration: isDuration ? (log?.duration_seconds?.toString() || "") : "",
-              saved: !!log,
+              weight: ws?.weight_kg?.toString() || "",
+              reps: ws?.reps?.toString() || "",
+              duration: isDuration ? (ws?.duration_seconds?.toString() || "") : "",
+              saved: !!ws,
             };
           });
         });
@@ -246,7 +265,7 @@ export default function WorkoutPage() {
     };
 
     fetchData();
-  }, [user, trainingDayId, weekStartDate, prevWeekStartDate]);
+  }, [user, trainingDayId, weekStartDate]);
 
   const getSetCountForTier = (exercise: Exercise, tier: string): number => {
     switch (tier) {
@@ -262,23 +281,29 @@ export default function WorkoutPage() {
     return getSetCountForTier(exercise, experienceTier);
   };
 
-  const getPreviousLog = (exerciseId: string, setNumber: number): WorkoutLog | undefined => {
-    return previousLogs.find(
-      (l) => l.exercise_id === exerciseId && l.set_number === setNumber
+  const getPreviousSet = (exerciseId: string, setIndex: number): WorkoutSet | undefined => {
+    return previousSets.find(
+      (s) => s.training_exercise_id === exerciseId && s.set_index === setIndex
     );
   };
 
-  const detectPBs = (exerciseId: string, weight: number, reps: number) => {
-    const historicalForExercise = allTimeLogs.filter(
-      (l) => l.exercise_id === exerciseId
-    );
+  const detectPBs = async (exerciseId: string, weight: number, reps: number) => {
+    if (!user || !currentSessionId) return [];
+    // Query all-time best for this exercise excluding current session
+    const { data: history } = await supabase
+      .from("workout_sets")
+      .select("weight_kg, reps, session_id")
+      .eq("training_exercise_id", exerciseId)
+      .neq("session_id", currentSessionId);
+
+    const historicalSets = (history || []) as any[];
     const pbs: PBType[] = [];
 
-    const maxWeight = Math.max(0, ...historicalForExercise.map((l) => l.weight_kg || 0));
+    const maxWeight = Math.max(0, ...historicalSets.map((s: any) => s.weight_kg || 0));
     if (weight > maxWeight) pbs.push("weight");
 
-    const sameWeightLogs = historicalForExercise.filter((l) => l.weight_kg === weight);
-    const maxRepsAtWeight = Math.max(0, ...sameWeightLogs.map((l) => l.reps_completed || 0));
+    const sameWeightSets = historicalSets.filter((s: any) => s.weight_kg === weight);
+    const maxRepsAtWeight = Math.max(0, ...sameWeightSets.map((s: any) => s.reps || 0));
     if (reps > maxRepsAtWeight && !pbs.includes("weight")) pbs.push("reps");
 
     return pbs;
@@ -295,80 +320,62 @@ export default function WorkoutPage() {
   };
 
   const saveSet = async (exerciseId: string, setIndex: number) => {
-    if (!user || !trainingDayId) return;
+    if (!user || !currentSessionId) return;
 
     const input = setInputs[exerciseId]?.[setIndex];
     if (!input) return;
 
-    // Find the exercise to check prescription type
     const exercise = exercises.find((ex) => ex.id === exerciseId);
     const isDuration = exercise ? getPrescriptionType(exercise.reps) === "duration" : false;
 
     const weightKg = isDuration ? null : (input.weight ? parseFloat(input.weight) : null);
-    const repsCompleted = isDuration ? null : (input.reps ? parseInt(input.reps, 10) : null);
+    const repsVal = isDuration ? null : (input.reps ? parseInt(input.reps, 10) : null);
     const durationSeconds = isDuration ? (input.duration ? parseInt(input.duration, 10) : null) : null;
 
-    const existingLog = currentLogs.find(
-      (l) => l.exercise_id === exerciseId && l.set_number === setIndex + 1
+    // Check for existing set in current session
+    const existing = currentSets.find(
+      (s) => s.training_exercise_id === exerciseId && s.set_index === setIndex + 1
     );
 
-    if (existingLog) {
+    if (existing) {
       await supabase
-        .from("workout_logs")
-        .update({ 
-          weight_kg: weightKg, 
-          reps_completed: repsCompleted,
+        .from("workout_sets")
+        .update({
+          weight_kg: weightKg,
+          reps: repsVal,
           duration_seconds: durationSeconds,
         } as any)
-        .eq("id", existingLog.id);
+        .eq("id", existing.id);
+
+      setCurrentSets((prev) =>
+        prev.map((s) =>
+          s.id === existing.id
+            ? { ...s, weight_kg: weightKg, reps: repsVal, duration_seconds: durationSeconds }
+            : s
+        )
+      );
     } else {
-      // Guard against duplicate inserts (double-tap / race condition)
-      const { data: dupCheck } = await supabase
-        .from("workout_logs")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("exercise_id", exerciseId)
-        .eq("set_number", setIndex + 1)
-        .eq("week_start_date", weekStartDate)
-        .maybeSingle();
+      const { data } = await supabase
+        .from("workout_sets")
+        .insert({
+          session_id: currentSessionId,
+          training_exercise_id: exerciseId,
+          set_index: setIndex + 1,
+          weight_kg: weightKg,
+          reps: repsVal,
+          duration_seconds: durationSeconds,
+        } as any)
+        .select()
+        .single();
 
-      if (dupCheck) {
-        // Already exists – update instead
-        await supabase
-          .from("workout_logs")
-          .update({
-            weight_kg: weightKg,
-            reps_completed: repsCompleted,
-            duration_seconds: durationSeconds,
-          } as any)
-          .eq("id", dupCheck.id);
-        setCurrentLogs((prev) => [...prev, { ...dupCheck, weight_kg: weightKg, reps_completed: repsCompleted, duration_seconds: durationSeconds } as any]);
-      } else {
-        const { data } = await supabase
-          .from("workout_logs")
-          .insert({
-            user_id: user.id,
-            training_day_id: trainingDayId,
-            exercise_id: exerciseId,
-            week_number: weekNumber,
-            week_start_date: weekStartDate,
-            set_number: setIndex + 1,
-            weight_kg: weightKg,
-            reps_completed: repsCompleted,
-            duration_seconds: durationSeconds,
-          } as any)
-          .select()
-          .single();
-
-        if (data) {
-          setCurrentLogs((prev) => [...prev, data as any]);
-        }
+      if (data) {
+        setCurrentSets((prev) => [...prev, data as any]);
       }
     }
 
-    // Detect PBs only for reps-based exercises
-    if (!isDuration && weightKg && repsCompleted) {
-      const pbs = detectPBs(exerciseId, weightKg, repsCompleted);
+    // Detect PBs for reps-based exercises
+    if (!isDuration && weightKg && repsVal) {
+      const pbs = await detectPBs(exerciseId, weightKg, repsVal);
       if (pbs.length > 0) {
         const key = `${exerciseId}-${setIndex}`;
         setPbFlags((prev) => ({ ...prev, [key]: pbs }));
@@ -394,8 +401,7 @@ export default function WorkoutPage() {
     for (const exercise of exercises) {
       const isDuration = getPrescriptionType(exercise.reps) === "duration";
       const sets = setInputs[exercise.id] || [];
-      
-      // Duration exercises contribute 0 volume
+
       if (isDuration) continue;
 
       let exerciseVolume = 0;
@@ -406,9 +412,9 @@ export default function WorkoutPage() {
       });
       totalVolume += exerciseVolume;
 
-      const prevSets = previousLogs.filter((l) => l.exercise_id === exercise.id);
-      const prevVolume = prevSets.reduce(
-        (sum, l) => sum + (l.weight_kg || 0) * (l.reps_completed || 0),
+      const prevExSets = previousSets.filter((s) => s.training_exercise_id === exercise.id);
+      const prevVolume = prevExSets.reduce(
+        (sum, s) => sum + (s.weight_kg || 0) * (s.reps || 0),
         0
       );
 
@@ -421,7 +427,7 @@ export default function WorkoutPage() {
         });
       } else {
         const currentMaxWeight = Math.max(0, ...sets.map((s) => parseFloat(s.weight) || 0));
-        const prevMaxWeight = Math.max(0, ...prevSets.map((l) => l.weight_kg || 0));
+        const prevMaxWeight = Math.max(0, ...prevExSets.map((s) => s.weight_kg || 0));
         if (currentMaxWeight > prevMaxWeight && prevMaxWeight > 0) {
           improvements.push({
             name: exercise.name,
@@ -432,8 +438,8 @@ export default function WorkoutPage() {
       }
     }
 
-    const prevTotalVolume = previousLogs.reduce(
-      (sum, l) => sum + (l.weight_kg || 0) * (l.reps_completed || 0),
+    const prevTotalVolume = previousSets.reduce(
+      (sum, s) => sum + (s.weight_kg || 0) * (s.reps || 0),
       0
     );
 
@@ -449,14 +455,14 @@ export default function WorkoutPage() {
     setSummaryData({
       improvements,
       totalVolume,
-      prevVolume: previousLogs.length > 0 ? prevTotalVolume : null,
+      prevVolume: previousSets.length > 0 ? prevTotalVolume : null,
       weeklyCompleted,
       weeklyTotal: Math.max(weeklyTotal, 1),
     });
   };
 
   const completeWorkout = async () => {
-    if (!user || !trainingDayId) return;
+    if (!user || !trainingDayId || !currentSessionId) return;
     setSaving(true);
 
     try {
@@ -464,7 +470,7 @@ export default function WorkoutPage() {
       for (const [exerciseId, sets] of Object.entries(setInputs)) {
         const exercise = exercises.find((ex) => ex.id === exerciseId);
         const isDuration = exercise ? getPrescriptionType(exercise.reps) === "duration" : false;
-        
+
         for (let i = 0; i < sets.length; i++) {
           if (!sets[i].saved) {
             if (isDuration && sets[i].duration) {
@@ -476,7 +482,13 @@ export default function WorkoutPage() {
         }
       }
 
-      // Mark workout as completed
+      // Mark session as completed
+      await supabase
+        .from("workout_sessions")
+        .update({ status: "completed", performed_at: new Date().toISOString() } as any)
+        .eq("id", currentSessionId);
+
+      // Also update user_training_schedule for consistency
       const { data: existing } = await supabase
         .from("user_training_schedule")
         .select("id")
@@ -535,7 +547,7 @@ export default function WorkoutPage() {
     return sets.every((s) => isDuration ? !!s.duration : (!!s.weight && !!s.reps));
   });
 
-  const isLocked = !warmupComplete && !workoutCompleted && currentLogs.length === 0;
+  const isLocked = !warmupComplete && !workoutCompleted && currentSets.length === 0;
 
   if (authLoading || loading) {
     return (
@@ -685,14 +697,13 @@ export default function WorkoutPage() {
 
                       {/* Set Rows */}
                       {sets.map((setInput, setIdx) => {
-                        const prevLog = getPreviousLog(exercise.id, setIdx + 1);
+                        const prevSet = getPreviousSet(exercise.id, setIdx + 1);
                         const pbKey = `${exercise.id}-${setIdx}`;
                         const pbs = pbFlags[pbKey] || [];
 
                         return (
                           <div key={setIdx} className="space-y-1">
                             {isDuration ? (
-                              /* Duration-based row */
                               <div
                                 className={cn(
                                   "grid grid-cols-[40px_1fr_60px] gap-2 items-center",
@@ -728,20 +739,17 @@ export default function WorkoutPage() {
                                   disabled={isLocked || workoutCompleted}
                                 />
                                 <div className="text-center">
-                                  {prevLog?.duration_seconds ? (
+                                  {prevSet?.duration_seconds ? (
                                     <span className="text-[10px] text-muted-foreground flex items-center justify-center gap-0.5">
                                       <Clock className="h-3 w-3" />
-                                      {prevLog.duration_seconds}s
+                                      {prevSet.duration_seconds}s
                                     </span>
-                                  ) : prevLog ? (
-                                    <span className="text-[10px] text-muted-foreground">—</span>
                                   ) : (
                                     <span className="text-[10px] text-muted-foreground">—</span>
                                   )}
                                 </div>
                               </div>
                             ) : (
-                              /* Reps-based row (unchanged) */
                               <div
                                 className={cn(
                                   "grid grid-cols-[40px_1fr_1fr_60px] gap-2 items-center",
@@ -795,10 +803,10 @@ export default function WorkoutPage() {
                                   disabled={isLocked || workoutCompleted}
                                 />
                                 <div className="text-center">
-                                  {prevLog ? (
+                                  {prevSet ? (
                                     <span className="text-[10px] text-muted-foreground flex items-center justify-center gap-0.5">
                                       <TrendingUp className="h-3 w-3" />
-                                      {prevLog.weight_kg}×{prevLog.reps_completed}
+                                      {prevSet.weight_kg}×{prevSet.reps}
                                     </span>
                                   ) : (
                                     <span className="text-[10px] text-muted-foreground">—</span>

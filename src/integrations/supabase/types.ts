@@ -1006,6 +1006,98 @@ export type Database = {
           },
         ]
       }
+      workout_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          performed_at: string | null
+          status: string
+          training_day_id: string
+          user_id: string
+          week_start_date: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          performed_at?: string | null
+          status?: string
+          training_day_id: string
+          user_id: string
+          week_start_date: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          performed_at?: string | null
+          status?: string
+          training_day_id?: string
+          user_id?: string
+          week_start_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_sessions_training_day_id_fkey"
+            columns: ["training_day_id"]
+            isOneToOne: false
+            referencedRelation: "training_days"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workout_sets: {
+        Row: {
+          created_at: string
+          duration_seconds: number | null
+          id: string
+          notes: string | null
+          reps: number | null
+          session_id: string
+          set_index: number
+          training_exercise_id: string
+          updated_at: string
+          weight_kg: number | null
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number | null
+          id?: string
+          notes?: string | null
+          reps?: number | null
+          session_id: string
+          set_index: number
+          training_exercise_id: string
+          updated_at?: string
+          weight_kg?: number | null
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number | null
+          id?: string
+          notes?: string | null
+          reps?: number | null
+          session_id?: string
+          set_index?: number
+          training_exercise_id?: string
+          updated_at?: string
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_sets_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "workout_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_sets_training_exercise_id_fkey"
+            columns: ["training_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "training_exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

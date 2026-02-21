@@ -354,7 +354,7 @@ export default function OnboardingPage() {
     await supabase.from("user_training_schedule").delete().eq("user_id", user.id);
     await supabase.from("routine_checklist_completions").delete().eq("user_id", user.id);
     await supabase.from("routine_checklist_items").delete().eq("user_id", user.id);
-    await supabase.from("workout_logs").delete().eq("user_id", user.id);
+    await supabase.from("workout_sessions").delete().eq("user_id", user.id);
 
     const { data: trainingDaysData } = await supabase
       .from("training_days")
