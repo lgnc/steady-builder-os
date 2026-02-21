@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, startOfWeek, addDays, isSameDay } from "date-fns";
 import { ChevronLeft, ChevronRight, Lock, Plus, Trash2 } from "lucide-react";
@@ -22,6 +22,12 @@ const HOUR_HEIGHT = 48; // pixels per hour
 export default function CalendarPage() {
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date()));
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
+  const [overrides, setOverrides] = useState<Array<{
+    block_id: string;
+    original_day_of_week: number;
+    override_day_of_week: number;
+    week_start_date: string;
+  }>>([]);
   const [selectedBlock, setSelectedBlock] = useState<ScheduleBlock | null>(null);
   const [routineSheetOpen, setRoutineSheetOpen] = useState(false);
   const [routineSheetType, setRoutineSheetType] = useState<string>("morning_routine");
@@ -77,6 +83,36 @@ export default function CalendarPage() {
 
     fetchBlocks();
   }, [user]);
+
+  // Fetch overrides for the current week
+  useEffect(() => {
+    const fetchOverrides = async () => {
+      if (!user) return;
+      const weekStartStr = format(weekStart, "yyyy-MM-dd");
+      const { data } = await supabase
+        .from("schedule_block_overrides" as any)
+        .select("block_id, original_day_of_week, override_day_of_week, week_start_date")
+        .eq("user_id", user.id)
+        .eq("week_start_date", weekStartStr);
+
+      if (data) setOverrides(data as any);
+      else setOverrides([]);
+    };
+
+    fetchOverrides();
+  }, [user, weekStart]);
+
+  // Apply overrides to blocks for the current week view
+  const effectiveBlocks = useMemo(() => {
+    if (overrides.length === 0) return blocks;
+    return blocks.map((b) => {
+      const override = overrides.find((o) => o.block_id === b.id);
+      if (override) {
+        return { ...b, day_of_week: override.override_day_of_week };
+      }
+      return b;
+    });
+  }, [blocks, overrides]);
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -226,7 +262,7 @@ export default function CalendarPage() {
 
             {/* Day Columns */}
             {weekDays.map((day) => {
-              const dayBlocks = blocks.filter(
+              const dayBlocks = effectiveBlocks.filter(
                 (b) => b.day_of_week === day.getDay()
               );
               const isToday = isSameDay(day, new Date());
@@ -424,11 +460,24 @@ export default function CalendarPage() {
           open={trainingSheetOpen}
           onOpenChange={setTrainingSheetOpen}
           block={trainingBlock}
-          blocks={blocks}
+          blocks={effectiveBlocks}
           userId={user.id}
+          weekStart={weekStart}
           onRescheduleComplete={(updatedBlocks) => {
             setBlocks(updatedBlocks);
             setTrainingBlock(null);
+          }}
+          onOverrideAdded={() => {
+            // Refetch overrides
+            const weekStartStr = format(weekStart, "yyyy-MM-dd");
+            supabase
+              .from("schedule_block_overrides" as any)
+              .select("block_id, original_day_of_week, override_day_of_week, week_start_date")
+              .eq("user_id", user.id)
+              .eq("week_start_date", weekStartStr)
+              .then(({ data }) => {
+                if (data) setOverrides(data as any);
+              });
           }}
         />
       )}

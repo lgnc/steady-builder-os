@@ -596,6 +596,44 @@ export type Database = {
         }
         Relationships: []
       }
+      schedule_block_overrides: {
+        Row: {
+          block_id: string
+          created_at: string
+          id: string
+          original_day_of_week: number
+          override_day_of_week: number
+          user_id: string
+          week_start_date: string
+        }
+        Insert: {
+          block_id: string
+          created_at?: string
+          id?: string
+          original_day_of_week: number
+          override_day_of_week: number
+          user_id: string
+          week_start_date: string
+        }
+        Update: {
+          block_id?: string
+          created_at?: string
+          id?: string
+          original_day_of_week?: number
+          override_day_of_week?: number
+          user_id?: string
+          week_start_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_block_overrides_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "schedule_blocks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       schedule_blocks: {
         Row: {
           block_type: string
