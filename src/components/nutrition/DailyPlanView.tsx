@@ -34,7 +34,7 @@ export function DailyPlanView({
   onToggleFavourite,
   onCustomise,
 }: DailyPlanViewProps) {
-  const monday = startOfWeek(new Date(weekStart + "T00:00:00"), { weekStartsOn: 1 });
+  const monday = startOfWeek(new Date(weekStart + "T00:00:00"), { weekStartsOn: 0 });
   const todayDayIndex = (() => {
     const now = new Date();
     const diff = Math.floor((now.getTime() - monday.getTime()) / (1000 * 60 * 60 * 24));

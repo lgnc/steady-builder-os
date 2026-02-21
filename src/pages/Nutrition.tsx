@@ -6,12 +6,13 @@ import { MobileLayout } from "@/components/layout/MobileLayout";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { NutritionSetup } from "@/components/nutrition/NutritionSetup";
 import { DailyPlanView } from "@/components/nutrition/DailyPlanView";
+import { WeeklyProgressBar } from "@/components/nutrition/WeeklyProgressBar";
 import { WeeklyOverview } from "@/components/nutrition/WeeklyOverview";
 import { ShoppingListSheet } from "@/components/nutrition/ShoppingListSheet";
 import { UpgradeModal } from "@/components/nutrition/UpgradeModal";
 import { Meal } from "@/components/nutrition/MealCard";
 import { cn } from "@/lib/utils";
-import { getWeekStartDate } from "@/lib/weekUtils";
+import { getSundayWeekStartDate } from "@/lib/weekUtils";
 import { Loader2, Lock, Sparkles } from "lucide-react";
 
 type ViewTab = "daily" | "weekly";
@@ -217,7 +218,7 @@ export default function NutritionPage() {
 
   const isExpired = plan?.expires_at && new Date(plan.expires_at) < new Date();
   const showSetup = !profile || !plan || isExpired;
-  const currentWeekStart = getWeekStartDate(new Date());
+  const currentWeekStart = getSundayWeekStartDate(new Date());
 
   if (loading) {
     return (
@@ -285,6 +286,13 @@ export default function NutritionPage() {
             </button>
           ))}
         </div>
+
+        {/* Weekly progress bar */}
+        <WeeklyProgressBar
+          planData={plan.plan_data}
+          weekStart={currentWeekStart}
+          completions={completions}
+        />
 
         {/* Content */}
         {tab === "daily" ? (
