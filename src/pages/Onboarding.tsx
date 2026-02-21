@@ -348,6 +348,13 @@ export default function OnboardingPage() {
   const generateSchedule = async () => {
     if (!user) return;
 
+    // Clear existing schedule data to prevent duplicates on re-onboarding
+    await supabase.from("schedule_block_overrides").delete().eq("user_id", user.id);
+    await supabase.from("schedule_blocks").delete().eq("user_id", user.id);
+    await supabase.from("user_training_schedule").delete().eq("user_id", user.id);
+    await supabase.from("routine_checklist_completions").delete().eq("user_id", user.id);
+    await supabase.from("routine_checklist_items").delete().eq("user_id", user.id);
+
     const { data: trainingDaysData } = await supabase
       .from("training_days")
       .select("*")
