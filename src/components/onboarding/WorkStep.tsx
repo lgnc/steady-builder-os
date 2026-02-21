@@ -33,6 +33,7 @@ const shiftLengths = [
 const shiftTypes = [
   { value: "days", label: "Days" },
   { value: "nights", label: "Nights" },
+  { value: "both", label: "Both" },
 ];
 
 export function WorkStep({ data, updateData }: WorkStepProps) {
