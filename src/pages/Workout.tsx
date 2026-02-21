@@ -128,7 +128,6 @@ export default function WorkoutPage() {
     const msg = `[WO-DEBUG] ${label}: ${typeof value === "object" ? JSON.stringify(value, null, 2) : value}`;
     console.log(msg);
   };
-  };
 
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
