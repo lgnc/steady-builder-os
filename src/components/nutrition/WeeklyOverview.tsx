@@ -17,7 +17,7 @@ export function WeeklyOverview({
   mealsPerDay,
   onOpenShoppingList,
 }: WeeklyOverviewProps) {
-  const monday = startOfWeek(new Date(weekStart + "T00:00:00"), { weekStartsOn: 1 });
+  const monday = startOfWeek(new Date(weekStart + "T00:00:00"), { weekStartsOn: 0 });
   const days = planData?.days || [];
 
   const dayStats = [1, 2, 3, 4, 5, 6, 7].map((d) => {
