@@ -29,6 +29,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { toast } from "sonner";
 import { useDay28Review } from "@/hooks/useDay28Review";
 import { Day28ReviewModal } from "@/components/profile/Day28ReviewModal";
+import { EightWeekGoalsCard } from "@/components/dashboard/EightWeekGoalsCard";
 
 interface ScheduleBlock {
   id: string;
@@ -456,6 +457,9 @@ export default function DashboardPage() {
             </div>
           </div>
         </motion.section>
+
+        {/* 8-Week Goals */}
+        {user && <EightWeekGoalsCard userId={user.id} />}
 
         {/* Quick Action Buttons */}
         <motion.div
