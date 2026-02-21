@@ -19,6 +19,15 @@ import { AddEventSheet } from "@/components/calendar/AddEventSheet";
 const HOURS = Array.from({ length: 19 }, (_, i) => i + 5);
 const HOUR_HEIGHT = 48; // pixels per hour
 
+interface ScheduledWorkout {
+  id: string;
+  user_id: string;
+  training_day_id: string;
+  scheduled_date: string;
+  status: string;
+  workout_session_id: string | null;
+}
+
 export default function CalendarPage() {
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date()));
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
@@ -35,6 +44,10 @@ export default function CalendarPage() {
   // Training block sheet state
   const [trainingSheetOpen, setTrainingSheetOpen] = useState(false);
   const [trainingBlock, setTrainingBlock] = useState<ScheduleBlock | null>(null);
+  const [trainingBlockDate, setTrainingBlockDate] = useState<string>("");
+
+  // Scheduled workouts for the current week
+  const [scheduledWorkouts, setScheduledWorkouts] = useState<ScheduledWorkout[]>([]);
 
   // Add event sheet state
   const [addEventSheetOpen, setAddEventSheetOpen] = useState(false);
@@ -102,6 +115,73 @@ export default function CalendarPage() {
     fetchOverrides();
   }, [user, weekStart]);
 
+  // Generate and fetch scheduled_workouts for visible week
+  useEffect(() => {
+    const ensureScheduledWorkouts = async () => {
+      if (!user) return;
+
+      const weekDates = Array.from({ length: 7 }, (_, i) => format(addDays(weekStart, i), "yyyy-MM-dd"));
+      const weekEndDate = weekDates[6];
+      const weekStartDate = weekDates[0];
+
+      // Fetch existing scheduled workouts for this range
+      const { data: existing } = await (supabase
+        .from("scheduled_workouts" as any)
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("scheduled_date", weekStartDate) as any)
+        .lte("scheduled_date", weekEndDate);
+
+      const existingMap = new Map<string, ScheduledWorkout>();
+      (existing || []).forEach((sw: any) => {
+        existingMap.set(`${sw.training_day_id}_${sw.scheduled_date}`, sw);
+      });
+
+      // Determine which training blocks need scheduled_workouts
+      // Use effectiveBlocks (with overrides applied) to get the correct day mapping
+      const trainingBlocks = blocks.filter((b) => b.block_type === "training" && b.training_day_id);
+
+      // Apply overrides to get effective day mapping
+      const weekStartStr = format(weekStart, "yyyy-MM-dd");
+      const effectiveTrainingBlocks = trainingBlocks.map((b) => {
+        const override = overrides.find((o) => o.block_id === b.id && o.week_start_date === weekStartStr);
+        if (override) return { ...b, day_of_week: override.override_day_of_week };
+        return b;
+      });
+
+      const toInsert: any[] = [];
+      effectiveTrainingBlocks.forEach((block) => {
+        const dayDate = weekDates[block.day_of_week]; // weekDays starts from Sunday (index 0)
+        if (!dayDate) return;
+        const key = `${block.training_day_id}_${dayDate}`;
+        if (!existingMap.has(key)) {
+          toInsert.push({
+            user_id: user.id,
+            training_day_id: block.training_day_id,
+            scheduled_date: dayDate,
+            status: "planned",
+          });
+        }
+      });
+
+      if (toInsert.length > 0) {
+        await supabase.from("scheduled_workouts" as any).insert(toInsert);
+      }
+
+      // Re-fetch all for this week
+      const { data: allSW } = await (supabase
+        .from("scheduled_workouts" as any)
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("scheduled_date", weekStartDate) as any)
+        .lte("scheduled_date", weekEndDate);
+
+      setScheduledWorkouts((allSW || []) as ScheduledWorkout[]);
+    };
+
+    ensureScheduledWorkouts();
+  }, [user, weekStart, blocks, overrides]);
+
   // Apply overrides to blocks for the current week view
   const effectiveBlocks = useMemo(() => {
     if (overrides.length === 0) return blocks;
@@ -119,10 +199,26 @@ export default function CalendarPage() {
   const goToPreviousWeek = () => setWeekStart(addDays(weekStart, -7));
   const goToNextWeek = () => setWeekStart(addDays(weekStart, 7));
 
-  const getBlockColor = (type: string) => {
+  // Get scheduled workout status for a training block on a specific date
+  const getScheduledWorkoutStatus = (trainingDayId: string, dateStr: string): string | null => {
+    const sw = scheduledWorkouts.find(
+      (s) => s.training_day_id === trainingDayId && s.scheduled_date === dateStr
+    );
+    return sw?.status || null;
+  };
+
+  const getBlockColor = (type: string, status?: string | null) => {
+    if (type === "training") {
+      switch (status) {
+        case "completed":
+          return "bg-primary border-primary text-primary-foreground";
+        case "in_progress":
+          return "bg-primary/60 border-primary ring-2 ring-primary/50 text-primary-foreground";
+        default: // planned or null
+          return "bg-primary/30 border-primary/50 text-primary-foreground/70";
+      }
+    }
     switch (type) {
-      case "training":
-        return "bg-primary/80 border-primary text-primary-foreground";
       case "morning_routine":
         return "bg-emerald-500/20 border-emerald-500/50 text-emerald-300";
       case "evening_routine":
@@ -266,6 +362,7 @@ export default function CalendarPage() {
                 (b) => b.day_of_week === day.getDay()
               );
               const isToday = isSameDay(day, new Date());
+              const dayDateStr = format(day, "yyyy-MM-dd");
 
               return (
                 <div
@@ -290,13 +387,16 @@ export default function CalendarPage() {
                     if (block.block_type === "sleep") return null;
 
                       const isWorkBlock = block.block_type === "work";
+                      const workoutStatus = block.block_type === "training" && block.training_day_id
+                        ? getScheduledWorkoutStatus(block.training_day_id, dayDateStr)
+                        : null;
 
                       return (
                         <DraggableBlock
                           key={block.id}
                           block={block}
                           style={style}
-                          colorClass={getBlockColor(block.block_type)}
+                          colorClass={getBlockColor(block.block_type, workoutStatus)}
                           isDragging={isDragging(block.id)}
                           dragOffset={getDragOffset(block.id)}
                           isResizing={isResizing(block.id)}
@@ -323,6 +423,7 @@ export default function CalendarPage() {
                               block.training_day_id
                             ) {
                               setTrainingBlock(block);
+                              setTrainingBlockDate(dayDateStr);
                               setTrainingSheetOpen(true);
                             } else if (
                               block.block_type === "morning_routine" ||
@@ -410,8 +511,12 @@ export default function CalendarPage() {
             <span>= Locked</span>
             <span className="mx-2">•</span>
             <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-sm bg-primary/80" />
-              <span>Training</span>
+              <div className="w-2 h-2 rounded-sm bg-primary" />
+              <span>Done</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-sm bg-primary/30" />
+              <span>Planned</span>
             </div>
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-sm bg-emerald-500/40" />
@@ -424,10 +529,6 @@ export default function CalendarPage() {
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-sm bg-teal-500/40" />
               <span>Custom</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-sm bg-amber-500/40" />
-              <span>Planning</span>
             </div>
             <span className="mx-2">•</span>
             <span>Long press to drag</span>
@@ -458,10 +559,26 @@ export default function CalendarPage() {
       {user && (
         <TrainingBlockSheet
           open={trainingSheetOpen}
-          onOpenChange={setTrainingSheetOpen}
+          onOpenChange={(open) => {
+            setTrainingSheetOpen(open);
+            if (!open) {
+              // Refetch scheduled workouts to update status
+              const weekDates = Array.from({ length: 7 }, (_, i) => format(addDays(weekStart, i), "yyyy-MM-dd"));
+              (supabase
+                .from("scheduled_workouts" as any)
+                .select("*")
+                .eq("user_id", user.id)
+                .gte("scheduled_date", weekDates[0]) as any)
+                .lte("scheduled_date", weekDates[6])
+                .then(({ data }: any) => {
+                  if (data) setScheduledWorkouts(data);
+                });
+            }
+          }}
           block={trainingBlock}
           blocks={effectiveBlocks}
           userId={user.id}
+          selectedDate={trainingBlockDate}
           weekStart={weekStart}
           onRescheduleComplete={(updatedBlocks) => {
             setBlocks(updatedBlocks);

@@ -1,8 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
-import { Dumbbell, CalendarClock, ArrowLeft, Check, AlertCircle, Clock } from "lucide-react";
+import { Dumbbell, CalendarClock, ArrowLeft, Check, AlertCircle, Clock, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Sheet,
@@ -52,6 +52,30 @@ export function TrainingBlockSheet({
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scheduledWorkout, setScheduledWorkout] = useState<{
+    id: string;
+    status: string;
+    workout_session_id: string | null;
+  } | null>(null);
+
+  // Look up the scheduled_workout for this block + date
+  useEffect(() => {
+    const lookup = async () => {
+      if (!open || !block?.training_day_id || !selectedDate) {
+        setScheduledWorkout(null);
+        return;
+      }
+      const { data } = await (supabase
+        .from("scheduled_workouts" as any)
+        .select("id, status, workout_session_id")
+        .eq("user_id", userId)
+        .eq("training_day_id", block.training_day_id) as any)
+        .eq("scheduled_date", selectedDate)
+        .maybeSingle();
+      setScheduledWorkout(data || null);
+    };
+    lookup();
+  }, [open, block?.training_day_id, selectedDate, userId]);
 
   // Generate time slots from 5:00 to 21:00 in 15-min increments
   const timeSlots = useMemo(() => {
@@ -74,7 +98,17 @@ export function TrainingBlockSheet({
   const trainingBlocks = blocks.filter((b) => b.block_type === "training");
   const trainingDays = new Set(trainingBlocks.map((b) => b.day_of_week));
 
+  const isCompleted = scheduledWorkout?.status === "completed";
+
   const handleStartWorkout = () => {
+    if (block.training_day_id) {
+      onOpenChange(false);
+      const dateParam = selectedDate || new Date().toISOString().split("T")[0];
+      navigate(`/workout/${block.training_day_id}?date=${dateParam}`);
+    }
+  };
+
+  const handleViewWorkout = () => {
     if (block.training_day_id) {
       onOpenChange(false);
       const dateParam = selectedDate || new Date().toISOString().split("T")[0];

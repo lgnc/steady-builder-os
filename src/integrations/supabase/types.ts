@@ -687,6 +687,54 @@ export type Database = {
           },
         ]
       }
+      scheduled_workouts: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          scheduled_date: string
+          status: string
+          training_day_id: string
+          user_id: string
+          workout_session_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          scheduled_date: string
+          status?: string
+          training_day_id: string
+          user_id: string
+          workout_session_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          scheduled_date?: string
+          status?: string
+          training_day_id?: string
+          user_id?: string
+          workout_session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_workouts_session_fk"
+            columns: ["workout_session_id"]
+            isOneToOne: false
+            referencedRelation: "workout_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_workouts_training_day_id_fkey"
+            columns: ["training_day_id"]
+            isOneToOne: false
+            referencedRelation: "training_days"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       streaks: {
         Row: {
           created_at: string
@@ -1012,6 +1060,7 @@ export type Database = {
           id: string
           performed_at: string | null
           scheduled_date: string
+          scheduled_workout_id: string | null
           status: string
           training_day_id: string
           user_id: string
@@ -1022,6 +1071,7 @@ export type Database = {
           id?: string
           performed_at?: string | null
           scheduled_date: string
+          scheduled_workout_id?: string | null
           status?: string
           training_day_id: string
           user_id: string
@@ -1032,12 +1082,20 @@ export type Database = {
           id?: string
           performed_at?: string | null
           scheduled_date?: string
+          scheduled_workout_id?: string | null
           status?: string
           training_day_id?: string
           user_id?: string
           week_start_date?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "workout_sessions_scheduled_workout_id_fkey"
+            columns: ["scheduled_workout_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_workouts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "workout_sessions_training_day_id_fkey"
             columns: ["training_day_id"]
