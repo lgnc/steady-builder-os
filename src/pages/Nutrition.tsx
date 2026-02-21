@@ -11,6 +11,7 @@ import { ShoppingListSheet } from "@/components/nutrition/ShoppingListSheet";
 import { UpgradeModal } from "@/components/nutrition/UpgradeModal";
 import { Meal } from "@/components/nutrition/MealCard";
 import { cn } from "@/lib/utils";
+import { getWeekStartDate } from "@/lib/weekUtils";
 import { Loader2, Lock, Sparkles } from "lucide-react";
 
 type ViewTab = "daily" | "weekly";
@@ -216,6 +217,7 @@ export default function NutritionPage() {
 
   const isExpired = plan?.expires_at && new Date(plan.expires_at) < new Date();
   const showSetup = !profile || !plan || isExpired;
+  const currentWeekStart = getWeekStartDate(new Date());
 
   if (loading) {
     return (
@@ -288,7 +290,7 @@ export default function NutritionPage() {
         {tab === "daily" ? (
           <DailyPlanView
             planData={plan.plan_data}
-            weekStart={plan.week_start}
+            weekStart={currentWeekStart}
             profile={profile}
             completions={completions}
             favouriteSlots={favourites}
@@ -304,7 +306,7 @@ export default function NutritionPage() {
         ) : (
           <WeeklyOverview
             planData={plan.plan_data}
-            weekStart={plan.week_start}
+            weekStart={currentWeekStart}
             completions={completions}
             mealsPerDay={profile.meals_per_day}
             onOpenShoppingList={() => setShoppingOpen(true)}
