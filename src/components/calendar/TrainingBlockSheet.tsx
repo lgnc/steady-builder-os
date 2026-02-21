@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { format } from "date-fns";
 import { Dumbbell, CalendarClock, ArrowLeft, Check, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -22,7 +23,9 @@ interface TrainingBlockSheetProps {
   blocks: ScheduleBlock[];
   userId: string;
   selectedDate?: string;
+  weekStart?: Date;
   onRescheduleComplete: (updatedBlocks: ScheduleBlock[]) => void;
+  onOverrideAdded?: () => void;
 }
 
 function formatTimeShort(time: string) {
@@ -38,11 +41,14 @@ export function TrainingBlockSheet({
   blocks,
   userId,
   selectedDate,
+  weekStart,
   onRescheduleComplete,
+  onOverrideAdded,
 }: TrainingBlockSheetProps) {
   const navigate = useNavigate();
   const [view, setView] = useState<"details" | "reschedule">("details");
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [rescheduleType, setRescheduleType] = useState<"this_week" | "permanent">("this_week");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +68,7 @@ export function TrainingBlockSheet({
   const handleOpenReschedule = () => {
     setView("reschedule");
     setSelectedDay(null);
+    setRescheduleType("this_week");
     setError(null);
   };
 
@@ -110,31 +117,51 @@ export function TrainingBlockSheet({
         return;
       }
 
-      // Update schedule_blocks
-      const blockUpdates = linkedIds.map((id) =>
-        supabase
-          .from("schedule_blocks")
-          .update({ day_of_week: selectedDay })
-          .eq("id", id)
-      );
+      if (rescheduleType === "this_week" && weekStart) {
+        // One-time override: insert into schedule_block_overrides
+        const weekStartStr = format(weekStart, "yyyy-MM-dd");
 
-      // Update user_training_schedule
-      const scheduleUpdate = block.training_day_id
-        ? supabase
-            .from("user_training_schedule")
+        const overrideInserts = linkedIds.map((id) => {
+          const originalBlock = blocks.find((b) => b.id === id);
+          return supabase.from("schedule_block_overrides" as any).upsert({
+            block_id: id,
+            user_id: userId,
+            original_day_of_week: originalBlock?.day_of_week ?? block.day_of_week,
+            override_day_of_week: selectedDay,
+            week_start_date: weekStartStr,
+          } as any, { onConflict: "block_id,week_start_date" });
+        });
+
+        await Promise.all(overrideInserts);
+        onOverrideAdded?.();
+      } else {
+        // Permanent change: update schedule_blocks directly
+        const blockUpdates = linkedIds.map((id) =>
+          supabase
+            .from("schedule_blocks")
             .update({ day_of_week: selectedDay })
-            .eq("user_id", userId)
-            .eq("training_day_id", block.training_day_id)
-        : null;
+            .eq("id", id)
+        );
 
-      await Promise.all([...blockUpdates, ...(scheduleUpdate ? [scheduleUpdate] : [])]);
+        // Update user_training_schedule
+        const scheduleUpdate = block.training_day_id
+          ? supabase
+              .from("user_training_schedule")
+              .update({ day_of_week: selectedDay })
+              .eq("user_id", userId)
+              .eq("training_day_id", block.training_day_id)
+          : null;
 
-      // Update local state
-      const updatedBlocks = blocks.map((b) =>
-        linkedIds.includes(b.id) ? { ...b, day_of_week: selectedDay } : b
-      );
+        await Promise.all([...blockUpdates, ...(scheduleUpdate ? [scheduleUpdate] : [])]);
 
-      onRescheduleComplete(updatedBlocks);
+        // Update local state
+        const updatedBlocks = blocks.map((b) =>
+          linkedIds.includes(b.id) ? { ...b, day_of_week: selectedDay } : b
+        );
+
+        onRescheduleComplete(updatedBlocks);
+      }
+
       onOpenChange(false);
       setView("details");
     } catch {
@@ -256,6 +283,65 @@ export function TrainingBlockSheet({
                   );
                 })}
               </div>
+
+              {/* Reschedule type choice */}
+              {selectedDay !== null && selectedDay !== block.day_of_week && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-5 space-y-2"
+                >
+                  <button
+                    onClick={() => setRescheduleType("this_week")}
+                    className={cn(
+                      "w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-all",
+                      rescheduleType === "this_week"
+                        ? "border-primary bg-primary/10"
+                        : "border-border bg-card hover:border-primary/50"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0",
+                        rescheduleType === "this_week" ? "border-primary" : "border-muted-foreground/40"
+                      )}
+                    >
+                      {rescheduleType === "this_week" && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">This week only</p>
+                      <p className="text-xs text-muted-foreground">One-time change, reverts next week</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setRescheduleType("permanent")}
+                    className={cn(
+                      "w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-all",
+                      rescheduleType === "permanent"
+                        ? "border-primary bg-primary/10"
+                        : "border-border bg-card hover:border-primary/50"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0",
+                        rescheduleType === "permanent" ? "border-primary" : "border-muted-foreground/40"
+                      )}
+                    >
+                      {rescheduleType === "permanent" && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Change my schedule</p>
+                      <p className="text-xs text-muted-foreground">Move permanently to {DAY_LABELS[selectedDay]}</p>
+                    </div>
+                  </button>
+                </motion.div>
+              )}
 
               {/* Conflict warning */}
               {error && (
