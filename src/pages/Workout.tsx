@@ -98,6 +98,7 @@ export default function WorkoutPage() {
   const weekNumber = parseInt(searchParams.get("week") || "1", 10);
 
   const dateParam = searchParams.get("date");
+  const scheduledWorkoutId = searchParams.get("swId"); // scheduled_workout_id from calendar
   const scheduledDate = dateParam || new Date().toISOString().split("T")[0];
   const referenceDate = new Date(scheduledDate + "T00:00:00");
   const weekStartDate = getWeekStartDate(referenceDate); // informational only
@@ -148,6 +149,7 @@ export default function WorkoutPage() {
 
       setDebugLog([]);
       addDebug("scheduledDate (identity)", scheduledDate);
+      addDebug("scheduledWorkoutId (from URL)", scheduledWorkoutId);
       addDebug("dateParam (from URL)", dateParam);
       addDebug("weekStartDate (informational only)", weekStartDate);
       addDebug("training_day_id", trainingDayId);
@@ -191,41 +193,91 @@ export default function WorkoutPage() {
       const tier = onboardingRes.data?.experience_tier || "beginner";
       if (onboardingRes.data) setExperienceTier(tier);
 
-      // 2. Upsert session by scheduled_date (NOT week_start_date)
-      addDebug("SESSION UPSERT query", {
-        table: "workout_sessions",
-        action: "insert",
-        conflict_target: "(user_id, training_day_id, scheduled_date)",
-        filters: { user_id: user.id, training_day_id: trainingDayId, scheduled_date: scheduledDate },
+      // 2. Resolve or create session via scheduled_workout_id
+      let resolvedSwId = scheduledWorkoutId;
+
+      // If no swId in URL, look up or create the scheduled_workout
+      if (!resolvedSwId) {
+        addDebug("No swId in URL, looking up scheduled_workout by date", { trainingDayId, scheduledDate });
+        const { data: swRow } = await (supabase
+          .from("scheduled_workouts" as any)
+          .select("id, status, workout_session_id")
+          .eq("user_id", user.id)
+          .eq("training_day_id", trainingDayId) as any)
+          .eq("scheduled_date", scheduledDate)
+          .maybeSingle();
+
+        if (swRow) {
+          resolvedSwId = (swRow as any).id;
+        } else {
+          // Create one
+          const { data: newSw } = await supabase
+            .from("scheduled_workouts" as any)
+            .insert({ user_id: user.id, training_day_id: trainingDayId, scheduled_date: scheduledDate, status: "planned" } as any)
+            .select("id")
+            .single();
+          resolvedSwId = (newSw as any)?.id || null;
+        }
+        addDebug("resolved scheduledWorkoutId", resolvedSwId);
+      }
+
+      if (!resolvedSwId) {
+        addDebug("ERROR", "Could not resolve scheduled_workout_id");
+        setLoading(false);
+        return;
+      }
+
+      // 3. Resolve or create workout_session anchored to scheduled_workout_id
+      addDebug("SESSION RESOLUTION", {
+        strategy: "by scheduled_workout_id",
+        scheduled_workout_id: resolvedSwId,
       });
 
-      await supabase
-        .from("workout_sessions")
-        .insert({
-          user_id: user.id,
-          training_day_id: trainingDayId,
-          week_start_date: weekStartDate,
-          scheduled_date: scheduledDate,
-          status: "in_progress",
-        } as any)
-        .select()
-        .maybeSingle();
+      let sessionRow: any = null;
 
-      const { data: sessionRow } = await (supabase
+      // Check for existing session linked to this scheduled_workout
+      const { data: existingSession } = await (supabase
         .from("workout_sessions")
         .select("*")
-        .eq("user_id", user.id)
-        .eq("training_day_id", trainingDayId) as any)
-        .eq("scheduled_date", scheduledDate)
+        .eq("user_id", user.id) as any)
+        .eq("scheduled_workout_id", resolvedSwId)
         .maybeSingle();
 
-      const sessionId = (sessionRow as any)?.id as string | null;
-      const sessionStatus = (sessionRow as any)?.status as string | undefined;
+      if (existingSession) {
+        sessionRow = existingSession;
+        addDebug("Found existing session for scheduled_workout", (existingSession as any).id);
+      } else {
+        // Create new session
+        const { data: newSession } = await supabase
+          .from("workout_sessions")
+          .insert({
+            user_id: user.id,
+            training_day_id: trainingDayId,
+            week_start_date: weekStartDate,
+            scheduled_date: scheduledDate,
+            scheduled_workout_id: resolvedSwId,
+            status: "in_progress",
+          } as any)
+          .select()
+          .single();
+        sessionRow = newSession;
+        addDebug("Created new session", (newSession as any)?.id);
+
+        // Link session to scheduled_workout and mark in_progress
+        if (newSession) {
+          await supabase
+            .from("scheduled_workouts" as any)
+            .update({ workout_session_id: (newSession as any).id, status: "in_progress" } as any)
+            .eq("id", resolvedSwId);
+        }
+      }
+
+      const sessionId = sessionRow?.id as string | null;
+      const sessionStatus = sessionRow?.status as string | undefined;
       setCurrentSessionId(sessionId);
 
       addDebug("resolved currentSessionId", sessionId);
       addDebug("session status", sessionStatus);
-      addDebug("full session row", sessionRow);
 
       if (sessionStatus === "completed") {
         setWorkoutCompleted(true);
@@ -334,7 +386,7 @@ export default function WorkoutPage() {
     };
 
     fetchData();
-  }, [user, trainingDayId, scheduledDate]);
+  }, [user, trainingDayId, scheduledDate, scheduledWorkoutId]);
 
   const getSetCountForTier = (exercise: Exercise, tier: string): number => {
     switch (tier) {
@@ -557,6 +609,21 @@ export default function WorkoutPage() {
         .update({ status: "completed", performed_at: new Date().toISOString() } as any)
         .eq("id", currentSessionId);
 
+      // Mark scheduled_workout as completed
+      if (scheduledWorkoutId) {
+        await supabase
+          .from("scheduled_workouts" as any)
+          .update({ status: "completed", completed_at: new Date().toISOString() } as any)
+          .eq("id", scheduledWorkoutId);
+        addDebug("scheduled_workout marked completed", scheduledWorkoutId);
+      } else {
+        // Fallback: find by session linkage
+        await (supabase
+          .from("scheduled_workouts" as any)
+          .update({ status: "completed", completed_at: new Date().toISOString() } as any)
+          .eq("workout_session_id", currentSessionId) as any);
+      }
+
       // Also update user_training_schedule for consistency
       const { data: existing } = await supabase
         .from("user_training_schedule")
@@ -650,6 +717,7 @@ export default function WorkoutPage() {
             <div className="text-[10px] font-mono space-y-0.5 text-foreground">
               <div className="font-bold text-primary mb-1">Workout Debug Panel</div>
               <div><span className="text-muted-foreground">scheduledDate:</span> <span className="font-bold">{scheduledDate}</span></div>
+              <div><span className="text-muted-foreground">scheduledWorkoutId:</span> <span className="font-bold">{scheduledWorkoutId?.slice(0, 8) || "null"}</span></div>
               <div><span className="text-muted-foreground">sessionId:</span> {currentSessionId?.slice(0, 8) || "null"}</div>
               <div><span className="text-muted-foreground">weekStartDate (info only):</span> <span className="opacity-50">{weekStartDate}</span></div>
               <div><span className="text-muted-foreground">trainingDayId:</span> {trainingDayId?.slice(0, 8)}</div>
