@@ -1011,6 +1011,7 @@ export type Database = {
           created_at: string
           id: string
           performed_at: string | null
+          scheduled_date: string
           status: string
           training_day_id: string
           user_id: string
@@ -1020,6 +1021,7 @@ export type Database = {
           created_at?: string
           id?: string
           performed_at?: string | null
+          scheduled_date: string
           status?: string
           training_day_id: string
           user_id: string
@@ -1029,6 +1031,7 @@ export type Database = {
           created_at?: string
           id?: string
           performed_at?: string | null
+          scheduled_date?: string
           status?: string
           training_day_id?: string
           user_id?: string
