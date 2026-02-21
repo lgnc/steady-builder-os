@@ -242,30 +242,56 @@ export default function WorkoutPage() {
 
       if (existingSession) {
         sessionRow = existingSession;
-        addDebug("Found existing session for scheduled_workout", (existingSession as any).id);
+        addDebug("Found existing session by scheduled_workout_id", (existingSession as any).id);
       } else {
-        // Create new session
-        const { data: newSession } = await supabase
+        // Fallback: check for orphaned session by date (from before the refactor)
+        const { data: dateSession } = await (supabase
           .from("workout_sessions")
-          .insert({
-            user_id: user.id,
-            training_day_id: trainingDayId,
-            week_start_date: weekStartDate,
-            scheduled_date: scheduledDate,
-            scheduled_workout_id: resolvedSwId,
-            status: "in_progress",
-          } as any)
-          .select()
-          .single();
-        sessionRow = newSession;
-        addDebug("Created new session", (newSession as any)?.id);
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("training_day_id", trainingDayId) as any)
+          .eq("scheduled_date", scheduledDate)
+          .maybeSingle();
 
-        // Link session to scheduled_workout and mark in_progress
-        if (newSession) {
+        if (dateSession) {
+          // Link this orphaned session to the scheduled_workout
+          sessionRow = dateSession;
+          await supabase
+            .from("workout_sessions")
+            .update({ scheduled_workout_id: resolvedSwId } as any)
+            .eq("id", (dateSession as any).id);
           await supabase
             .from("scheduled_workouts" as any)
-            .update({ workout_session_id: (newSession as any).id, status: "in_progress" } as any)
+            .update({ workout_session_id: (dateSession as any).id } as any)
             .eq("id", resolvedSwId);
+          addDebug("Linked orphaned date-session to scheduled_workout", (dateSession as any).id);
+        } else {
+          // Create new session
+          const { data: newSession, error: insertErr } = await supabase
+            .from("workout_sessions")
+            .insert({
+              user_id: user.id,
+              training_day_id: trainingDayId,
+              week_start_date: weekStartDate,
+              scheduled_date: scheduledDate,
+              scheduled_workout_id: resolvedSwId,
+              status: "in_progress",
+            } as any)
+            .select()
+            .single();
+
+          if (insertErr) {
+            console.error("[WO] session insert error:", insertErr);
+          }
+          sessionRow = newSession;
+          addDebug("Created new session", (newSession as any)?.id);
+
+          if (newSession) {
+            await supabase
+              .from("scheduled_workouts" as any)
+              .update({ workout_session_id: (newSession as any).id, status: "in_progress" } as any)
+              .eq("id", resolvedSwId);
+          }
         }
       }
 
