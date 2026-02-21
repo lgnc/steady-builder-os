@@ -156,7 +156,12 @@ export default function OnboardingPage() {
         .single();
       
       if (onboardingData?.onboarding_completed) {
-        navigate("/dashboard");
+        // Reset so user can redo onboarding
+        await supabase
+          .from("onboarding_data")
+          .update({ onboarding_completed: false, onboarding_step: 1 } as any)
+          .eq("user_id", user.id);
+        setStep(1);
       } else if (onboardingData?.onboarding_step) {
         setStep(onboardingData.onboarding_step);
       }
