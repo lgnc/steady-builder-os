@@ -1,92 +1,49 @@
-# 8-Week Goals (12-Week Year Style)
-
-## What You'll Get
-
-A new onboarding step (after the existing Goals step) where you pick 1-3 measurable 8-week goals from a curated preset list. These goals appear on the Dashboard as progress bars right below the daily completion section, showing real-time percentage progress based on actual tracked data (weight, workout logs, etc.). Goals are editable during Week 1 only, then locked for the remaining 7 weeks.
-
-## Preset Goal Categories
-
-Goals the app can automatically measure from existing data:
 
 
-| H Category          | Example Presets                             | How It's Measur ed                                         |
-| ------------------- | ------------------------------------------- | ---------------------------------------------------------- |
-| Weight Loss         | Lose 3kg / 5kg / 8kg hl                     | Starting weight (onboarding) vs latest daily_weights entry |
-| Strength - Bench    | Bench 80kg / 100kg / 120kg                  | Best weight_kg in workout_logs for bench press exercise    |
-| Strength - Squat    | Squat 100kg / 120kg / 140kg                 | Best weight_kg in workout_logs for squat exercise          |
-| Strength - Deadlift | Deadlift 120kg / 140kg / 180kg              | Best weight_kg in workout_logs for deadlift exercise       |
-| Pull-ups            | 5 / 8 / 10 pull-ups in a row                | Best reps_completed in workout_logs for pull-ups           |
-| Consistency         | Complete 90% of training sessions           | user_training_schedule completed count vs total            |
-| Habits              | Maintain 80% / 90% habit completion         | habit_completions average over the 8 weeks                 |
-| Nutrition           | Hit nutrition targets 80% / 90% of the time | meal_completions percentage                                |
+# Sliding Scale Goals in Onboarding Step 9
 
+## Overview
 
-Users pick a category, then select or enter a specific target number within that category.
-
-## Dashboard Integration
-
-Below the daily completion bar and streaks, a new "8-Week Goals" card appears with:
-
-- Each goal as a compact row: label + progress bar + percentage
-- Subtle styling that doesn't overwhelm the daily view but keeps goals visible
+Replace the static preset buttons for Weight Loss, Bench Press, Squat, Deadlift, and Pull-ups with slider controls so users can dial in their exact target. Consistency, Habits, and Nutrition stay as preset button selections (80% / 90%).
 
 ## Changes
 
-### 1. New database table: `user_eight_week_goals`
+### File: `src/components/onboarding/EightWeekGoalsStep.tsx`
 
+**1. Update the data model for goal categories**
 
-| Column         | Type        | Notes                                             |
-| -------------- | ----------- | ------------------------------------------------- |
-| id             | uuid        | PK                                                |
-| user_id        | uuid        | NOT NULL                                          |
-| goal_type      | text        | e.g. "weight_loss", "bench_press", "consistency"  |
-| goal_label     | text        | Display text e.g. "Bench 100kg"                   |
-| target_value   | numeric     | The target number                                 |
-| baseline_value | numeric     | Starting value at time of goal creation           |
-| current_value  | numeric     | Latest measured value (updated on Dashboard load) |
-| created_at     | timestamptz | When goal was set                                 |
-| locked_at      | timestamptz | NULL until end of week 1, then set to lock edits  |
+Split categories into two types:
+- **Slider categories** (weight_loss, bench_press, squat, deadlift, pull_ups) -- each gets a `min`, `max`, `step`, and `unit` instead of `presets`
+- **Preset categories** (consistency, habits, nutrition) -- keep the existing button-based selection
 
+```text
+Slider configs:
+- Weight Loss:   1kg - 20kg,   step 0.5,  label "Lose {value}kg"
+- Bench Press:   60kg - 300kg, step 5,    label "Bench {value}kg"
+- Squat:         60kg - 300kg, step 5,    label "Squat {value}kg"
+- Deadlift:      60kg - 300kg, step 5,    label "Deadlift {value}kg"
+- Pull-ups:      1 - 20,      step 1,    label "{value} pull-ups"
+```
 
-- RLS: users can SELECT, INSERT, UPDATE, DELETE their own rows
-- DELETE/UPDATE restricted in app code after locked_at is set
+**2. Update the UI for slider categories**
 
-### 2. New onboarding step: `EightWeekGoalsStep`
+When a user taps a slider category to add it:
+- Show the category row with a Radix `Slider` component
+- Display the current value prominently next to the slider
+- An "Add" button confirms the selection and adds it to goals
+- Uses the existing `src/components/ui/slider.tsx` component
 
-- Inserted as step 9 (after current GoalsStep at step 8), shifting Friction/Nutrition/Habits/Review to 10-13
-- TOTAL_STEPS becomes 13
-- UI: category cards to pick from, then a number input for the target
-- Max 3 goals, minimum 1 encouraged but not enforced
-- Goals saved to the database during `completeOnboarding()`
+**3. Preset categories remain unchanged**
 
-### 3. Update `ReviewStep`
+Consistency, Habits, and Nutrition keep their current button-based UI with 80%/90% options.
 
-- Add an "8-Week Goals" section showing the selected goals
+**4. Selected goals display**
 
-### 4. Update Dashboard
+No changes to the selected goals section at the top -- it already shows the label and an X to remove.
 
-- New section below daily completion/streaks: "8-Week Goals"
-- Each goal shows a progress bar calculated from real data:
-  - Weight goals: query latest daily_weights vs baseline
-  - Strength goals: query max weight_kg from workout_logs for matching exercise
-  - Consistency goals: query completed training sessions as percentage
-  - Habit/Nutrition goals: query completion percentages
-- Compact card design, always visible as a reminder
+## Technical Details
 
-### 5. Goal editing (Week 1 only)
-
-- Profile page gets a small "Edit Goals" option
-- After 7 days from created_at, the `locked_at` timestamp is set and edits are blocked
-- UI shows "Locked" badge after Week 1
-
-## Files Changed
-
-
-| File                                               | Change                                               |
-| -------------------------------------------------- | ---------------------------------------------------- |
-| Migration SQL                                      | Create `user_eight_week_goals` table with RLS        |
-| `src/components/onboarding/EightWeekGoalsStep.tsx` | New step component                                   |
-| `src/pages/Onboarding.tsx`                         | Add step 9, bump total to 13, save goals on complete |
-| `src/components/onboarding/ReviewStep.tsx`         | Add 8-week goals section                             |
-| `src/pages/Dashboard.tsx`                          | Add goals progress section below streaks             |
-| `src/pages/Profile.tsx`                            | Add edit goals option (Week 1 only)                  |
+- Import `Slider` from `@/components/ui/slider`
+- Add a `useState` for tracking which slider category is currently being configured and its draft value
+- Generate the `goal_label` dynamically from the slider value (e.g., slider at 75 for bench = "Bench 75kg")
+- No database or other file changes needed -- the goal data shape (`goal_type`, `goal_label`, `target_value`) stays the same
