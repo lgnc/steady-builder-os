@@ -581,23 +581,29 @@ export default function DashboardPage() {
                 const Icon = config.icon;
                 const completed = anchorCompletions[block.block_type];
 
-                return (
-                  <motion.div
-                    key={block.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.4 + index * 0.05 }}
-                    className={cn(
-                      "flex items-center gap-3 p-3 rounded-xl border border-border bg-card cursor-pointer active:scale-[0.98] transition-transform",
-                      viewingFuture && "opacity-60"
-                    )}
-                    onClick={() => handleAnchorClick(block)}
-                  >
-                    <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="flex-1 text-sm font-medium">{config.label}</span>
-                    {completed && (
-                      <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
-                    )}
+                  return (
+                    <motion.div
+                      key={block.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.4 + index * 0.05 }}
+                      className={cn(
+                        "flex items-center gap-4 p-4 rounded-xl border border-border bg-card cursor-pointer active:scale-[0.98] transition-transform",
+                        completed && "border-primary/30 bg-primary/5",
+                        viewingFuture && "opacity-60"
+                      )}
+                      onClick={() => handleAnchorClick(block)}
+                    >
+                      <div className={cn(
+                        "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
+                        completed ? "bg-primary/15" : "bg-muted"
+                      )}>
+                        <Icon className={cn("h-5 w-5", completed ? "text-primary" : "text-muted-foreground")} />
+                      </div>
+                      <span className="flex-1 text-base font-medium">{config.label}</span>
+                      {completed && (
+                        <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
+                      )}
                     <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                   </motion.div>
                 );
