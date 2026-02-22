@@ -1,60 +1,39 @@
 
 
-## Two Bugs to Fix
+## "Building Your Plan" Loading Screen
 
-### Bug 1: 8-Week Goals Showing 100% After Re-Onboarding
+### Overview
+After tapping "Install Structure" on the final onboarding step, a full-screen animated loading sequence will play while the backend work runs in parallel. The screen creates a premium "labor illusion" -- making the system feel like it's doing serious, personalised work.
 
-**Root cause:** When re-running onboarding, the cleanup in `generateSchedule()` deletes old `habits`, `user_training_schedule`, and `scheduled_workouts`, but it does NOT delete:
-- `habit_completions` -- old completion records remain, so the habits goal calculation finds completions and computes a high percentage
-- `meal_completions` -- same issue for nutrition goal
-- `workout_logs` -- stale logs can inflate strength/pull-up goals
+### The User Experience
+- User taps "Install Structure" on step 13
+- Screen transitions to a dark, full-screen loading view
+- 5 personalised stages animate in sequence, each lasting ~3 seconds (~15 seconds total)
+- A smooth progress bar advances across the bottom
+- Once both the animation AND backend work are complete, the user is taken to the dashboard
 
-When the dashboard loads, `EightWeekGoalsCard.updateCurrentValue()` queries these tables, finds old data, and writes inflated `current_value` back to the fresh goals.
+### The 5 Stages (personalised to user inputs)
+1. "Analysing your schedule..." (references work hours if provided)
+2. "Building your training blocks..." (references selected program)
+3. "Placing sessions around your commitments..." (references training window)
+4. "Calibrating your 8-week targets..." (references goal count)
+5. "Finalising your operating system..."
 
-**Fix in `src/pages/Onboarding.tsx` -- `generateSchedule()` function:**
-Add deletion of `habit_completions`, `meal_completions`, and `workout_logs` to the cleanup block (before line 364), so re-onboarding starts with a truly clean slate.
+Each line fades in with a subtle upward motion, holds, then fades out before the next appears. A pulsing icon (Loader2) gives a sense of active processing.
 
----
+### Files Changed
 
-### Bug 2: Workouts Scheduled During Work Hours
+**New file: `src/components/onboarding/BuildingPlanScreen.tsx`**
+- Full-screen component using framer-motion for stage transitions
+- Accepts `onComplete` callback and `data` prop (to personalise messages)
+- Cycles through 5 stages on a 3-second timer
+- Renders the existing `ProgressBar` component advancing smoothly
+- Calls `onComplete` after all stages finish
 
-**Root cause:** The schedule builder places training blocks based on the preferred training window without checking whether they overlap with work hours. For a user working 06:00-18:00 who selects "morning" training:
-1. Wake time might be 05:00, morning routine ends at 05:45
-2. Gym commute places them at 06:00
-3. Training block: 06:00-07:00 -- this lands squarely inside work hours
-
-The code never validates training placement against the work block.
-
-**Fix in `src/pages/Onboarding.tsx` -- `generateSchedule()` function:**
-Add an overlap guard for morning training on work days:
-- Calculate the latest time training (plus commutes) would end
-- If that end time is after `workStart`, shift training to before work by working backwards from `workStart` (subtracting training duration and commute times)
-- If there's genuinely no room before work (e.g., wake time is too close to work start), fall back to evening placement for that day
-
-Apply a similar check for afternoon training to ensure it doesn't spill past `workEnd`.
-
----
-
-### Technical Details
-
-**File: `src/pages/Onboarding.tsx`**
-
-Changes to `generateSchedule()`:
-
-1. Add cleanup lines after the existing deletions (around line 362):
-```typescript
-await supabase.from("habit_completions").delete().eq("user_id", user.id);
-await supabase.from("meal_completions").delete().eq("user_id", user.id);
-await supabase.from("workout_logs").delete().eq("user_id", user.id);
-```
-
-2. In the morning training branch (line 419), before placing blocks, check if the training + commutes would end after `workStart`. If so, work backwards from `workStart`:
-   - Subtract commute-to-work time
-   - Subtract training duration
-   - Subtract commute-to-gym time
-   - If the resulting start time is before the morning routine end, fall back to evening placement
-
-3. Similar validation for the afternoon branch to keep training within the lunch window rather than spilling into the afternoon.
-
-No database schema changes are needed.
+**Modified file: `src/pages/Onboarding.tsx`**
+- Add `showBuildingScreen` boolean state
+- In `completeOnboarding()`: after saving onboarding data, set `showBuildingScreen = true` and kick off backend work (`generateSchedule`, `seedHabits`, etc.) in parallel, storing a `backendDone` ref when they finish
+- In the render: when `showBuildingScreen` is true, render `BuildingPlanScreen` instead of the step UI
+- The `onComplete` callback checks `backendDone` -- if backend is still running, it waits; otherwise navigates to `/dashboard`
+- The toast ("Structure installed") fires on navigation, not during the loading screen
 
