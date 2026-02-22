@@ -15,9 +15,9 @@ import { RoutineChecklistSheet } from "@/components/calendar/RoutineChecklistShe
 import { TrainingBlockSheet } from "@/components/calendar/TrainingBlockSheet";
 import { AddEventSheet } from "@/components/calendar/AddEventSheet";
 
-// Time slots from 5 AM to 11 PM
-const HOURS = Array.from({ length: 19 }, (_, i) => i + 5);
 const HOUR_HEIGHT = 48; // pixels per hour
+const DEFAULT_START_HOUR = 5;
+const END_HOUR = 23;
 
 interface ScheduledWorkout {
   id: string;
@@ -194,6 +194,23 @@ export default function CalendarPage() {
     });
   }, [blocks, overrides]);
 
+  // Compute dynamic start hour based on earliest block
+  const startHourOfGrid = useMemo(() => {
+    if (effectiveBlocks.length === 0) return DEFAULT_START_HOUR;
+    let earliest = DEFAULT_START_HOUR;
+    effectiveBlocks.forEach((b) => {
+      if (b.block_type === "sleep") return;
+      const [h] = b.start_time.split(":").map(Number);
+      if (h < earliest) earliest = h;
+    });
+    return earliest;
+  }, [effectiveBlocks]);
+
+  const HOURS = useMemo(() => {
+    const count = END_HOUR - startHourOfGrid;
+    return Array.from({ length: count }, (_, i) => i + startHourOfGrid);
+  }, [startHourOfGrid]);
+
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const goToPreviousWeek = () => setWeekStart(addDays(weekStart, -7));
@@ -256,9 +273,9 @@ export default function CalendarPage() {
       duration = 24 - startHour;
     }
 
-    if (startHour < 5 || startHour >= 23) return null;
+    if (startHour < startHourOfGrid || startHour >= END_HOUR) return null;
 
-    const top = (startHour - 5) * HOUR_HEIGHT;
+    const top = (startHour - startHourOfGrid) * HOUR_HEIGHT;
     const height = duration * HOUR_HEIGHT;
 
     return { top, height };
