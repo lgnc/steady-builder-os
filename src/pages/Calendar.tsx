@@ -16,8 +16,8 @@ import { TrainingBlockSheet } from "@/components/calendar/TrainingBlockSheet";
 import { AddEventSheet } from "@/components/calendar/AddEventSheet";
 
 const HOUR_HEIGHT = 48; // pixels per hour
-const DEFAULT_START_HOUR = 5;
-const END_HOUR = 23;
+const DEFAULT_START_HOUR = 0;
+const END_HOUR = 24;
 
 interface ScheduledWorkout {
   id: string;
