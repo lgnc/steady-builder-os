@@ -1,58 +1,49 @@
 
 
-# Replace Streak Counters with Weekly Completion Block
+# Fix On-Site Calendar: Shift Selection + Training Schedule
 
-## What Changes
+## Problems Identified
 
-The two streak counter cards (Training streak and Morning streak) at the top of the dashboard will be replaced with a single **Weekly Completion** block that shows three progress bars: Habits, Training, and Nutrition -- each targeting 85%+.
+1. **Shift config sheet not triggering**: The onboarding generates on-site blocks immediately with defaults (and alternates day/night when "both" is selected). When the user later toggles to "On-Site" on the calendar, the `weekHasShiftConfig` check looks for `shift_type` AND `shift_start` in `user_schedule_mode` — but the onboarding never writes to that table. So if a `user_schedule_mode` row exists without shift config (or doesn't exist at all), the sheet may not appear, or old onboarding-generated blocks are shown instead.
 
-## Layout
+2. **Training on every day**: The onboarding `generateOnSiteBlocks` function puts training on ALL 7 days. The calendar's `generateOnSiteBlocksFromConfig` was fixed to check against home training days, but only runs when the shift config sheet is confirmed. If the user never gets the sheet (issue 1), they see the old onboarding blocks with training every day.
 
-The current top section has:
-- Daily completion % (left, larger)
-- Training streak (middle)
-- Morning streak (right)
+## Solution
 
-The new layout will be:
-- Daily completion % (unchanged, stays at top)
-- **Weekly Completion card** (full width, below daily completion) containing three mini progress bars for Habits, Training, and Nutrition, each with a percentage and color-coded against the 85% target
+### 1. Always show the Shift Config Sheet on first toggle to On-Site each week
 
-## Weekly Completion Card Design
+**File: `src/pages/Calendar.tsx`**
 
-A single `card-stat` with the heading "This Week" showing:
+- Fix `toggleScheduleMode`: When switching to `on_site`, ALWAYS open the shift config sheet if no shift config exists for this week. The current logic is correct in intent but the `weekHasShiftConfig` state may not be set properly.
+- Fix the `fetchMode` useEffect: Ensure `weekHasShiftConfig` is only true when `shift_start` is explicitly set (not just when `shift_type` has its default value of `'days'`).
 
-```text
-This Week                          Target: 85%
-Habits      ████████░░  72%
-Training    ██████████  100% (3/3)
-Nutrition   ███████░░░  68%
-```
+### 2. Delete old onboarding-generated on-site blocks and regenerate correctly
 
-- Bars turn green (primary) at 85%+, amber at 50-84%, red below 50%
-- Each row shows the category icon, label, progress bar, and percentage
-- Training also shows session count (e.g., "3/3")
+**File: `src/pages/Calendar.tsx`** (in `handleShiftConfigConfirm`)
 
-## Data Fetching
+- The existing flow already deletes all `on_site` blocks and regenerates them — this is correct. The fix is making sure the sheet actually opens (issue 1 above).
 
-A new `useEffect` will compute weekly totals using the same week boundaries (Sunday start) already used elsewhere:
+### 3. Fix onboarding to not generate on-site blocks at all
 
-1. **Training %**: Count completed sessions vs scheduled sessions for the week from `user_training_schedule`
-2. **Habits %**: Count habit completions vs (active habits x days elapsed) from `habit_completions` and `habits`
-3. **Nutrition %**: Count completed meals vs expected meals from `meal_completions` and `meal_plans`
+**File: `src/pages/Onboarding.tsx`**
 
-This reuses the same queries already proven in `WeeklyPerformanceCard.tsx` on the Profile page.
+- Remove or skip the call to `generateOnSiteBlocks` during onboarding. On-site blocks should only be generated when the user first toggles to "On-Site" on the calendar and configures their shift via the sheet. This prevents stale/incorrect blocks from existing in the database.
+- The `generateOnSiteBlocks` function can remain but won't be called.
 
-## Technical Changes
+### 4. Fix block filtering when toggling to On-Site with no blocks yet
 
-### `src/pages/Dashboard.tsx`
+**File: `src/pages/Calendar.tsx`**
 
-1. Add new state: `weeklyCompletion` with `{ habitsPercent, trainingCompleted, trainingTotal, nutritionPercent }`
-2. Add a `useEffect` that fetches weekly data (habits, training, nutrition) for the current week
-3. Remove the two streak counter `div`s (lines 444-459)
-4. Replace with a full-width Weekly Completion card below the daily completion bar
-5. Remove `streaks` state and its fetch since it's no longer needed
-6. Remove `Flame` icon import (no longer used)
+- After `handleShiftConfigConfirm` re-fetches blocks, filter correctly for `on_site` mode (current code already does this).
+- Ensure the re-fetch also updates `scheduledWorkouts` if needed.
 
-### No database changes needed
-All data is already available in existing tables.
+## Technical Details
+
+### Changes to `src/pages/Onboarding.tsx`
+- Comment out / remove lines ~732-737 that call `generateOnSiteBlocks` and insert on-site blocks during onboarding.
+
+### Changes to `src/pages/Calendar.tsx`
+- In the `fetchMode` useEffect (~line 120): tighten the `weekHasShiftConfig` check to require `shift_start` to be a non-null, non-empty value.
+- In `toggleScheduleMode` (~line 129): the existing logic already gates on `weekHasShiftConfig` — once issue 1 is fixed, this will work correctly.
+- In the block filter after re-fetch (~line 202): ensure it filters to `schedule_mode === 'on_site'` only (not falling back to blocks without a mode).
 
