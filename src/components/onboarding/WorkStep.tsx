@@ -181,6 +181,27 @@ export function WorkStep({ data, updateData }: WorkStepProps) {
           </div>
         </div>
 
+        {/* Rest Days */}
+        <div className="space-y-3">
+          <label className="text-sm font-medium">Rest days (no training)</label>
+          <div className="flex flex-wrap gap-2">
+            {daysOfWeek.map((day) => (
+              <button
+                key={day.value}
+                onClick={() => toggleRestDay(day.value)}
+                className={cn(
+                  "px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                  data.restDays.includes(day.value)
+                    ? "bg-primary/10 text-primary border border-primary/20"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                )}
+              >
+                {day.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Preferred Training Days */}
         <div className="space-y-3">
           <label className="flex items-center gap-2 text-sm font-medium">
@@ -211,27 +232,6 @@ export function WorkStep({ data, updateData }: WorkStepProps) {
             })}
           </div>
           <p className="text-xs text-muted-foreground">Days marked as rest days are excluded.</p>
-        </div>
-
-        {/* Rest Days */}
-        <div className="space-y-3">
-          <label className="text-sm font-medium">Rest days (no training)</label>
-          <div className="flex flex-wrap gap-2">
-            {daysOfWeek.map((day) => (
-              <button
-                key={day.value}
-                onClick={() => toggleRestDay(day.value)}
-                className={cn(
-                  "px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                  data.restDays.includes(day.value)
-                    ? "bg-primary/10 text-primary border border-primary/20"
-                    : "bg-muted text-muted-foreground hover:bg-muted/80"
-                )}
-              >
-                {day.label}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
     </div>
