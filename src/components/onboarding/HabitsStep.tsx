@@ -40,7 +40,7 @@ export function HabitsStep({ data, updateData }: HabitsStepProps) {
       <div className="space-y-2">
         <h2 className="text-2xl font-semibold tracking-tight">Habits</h2>
         <p className="text-muted-foreground">
-          Small daily actions compound into transformation. Choose what you're building and what you're leaving behind.
+          Add habits you want to build and ones you want to break. You can always edit these later from your dashboard.
         </p>
       </div>
 
@@ -52,6 +52,9 @@ export function HabitsStep({ data, updateData }: HabitsStepProps) {
         </div>
 
         <div className="space-y-2">
+          {data.habitsBuild.length === 0 && (
+            <p className="text-xs text-muted-foreground/70 italic pl-1">Tap + to add your first habit</p>
+          )}
           {data.habitsBuild.map((habit, index) => (
             <div
               key={index}
@@ -95,6 +98,9 @@ export function HabitsStep({ data, updateData }: HabitsStepProps) {
         </div>
 
         <div className="space-y-2">
+          {data.habitsBreak.length === 0 && (
+            <p className="text-xs text-muted-foreground/70 italic pl-1">Tap + to add your first habit</p>
+          )}
           {data.habitsBreak.map((habit, index) => (
             <div
               key={index}
