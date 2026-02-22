@@ -559,32 +559,25 @@ export default function CalendarPage() {
 
         {/* Legend */}
         <div className="px-4 py-3 border-t border-border/50 shrink-0">
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
-            <Lock className="h-3 w-3" />
-            <span>= Locked</span>
-            <span className="mx-2">•</span>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-sm bg-primary" />
-              <span>Done</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-sm bg-primary/30" />
-              <span>Planned</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-sm bg-emerald-500/40" />
-              <span>Morning</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-sm bg-violet-500/40" />
-              <span>Evening</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-sm bg-teal-500/40" />
-              <span>Custom</span>
-            </div>
-            <span className="mx-2">•</span>
-            <span>Long press to drag</span>
+          <div className="flex items-center gap-x-3 gap-y-1.5 text-[10px] text-muted-foreground flex-wrap">
+            {[
+              { cls: "cal-block-training", label: "Training" },
+              { cls: "cal-block-training-done", label: "Done" },
+              { cls: "cal-block-morning", label: "Morning" },
+              { cls: "cal-block-evening", label: "Evening" },
+              { cls: "cal-block-work", label: "Work" },
+              { cls: "cal-block-sleep", label: "Sleep" },
+              { cls: "cal-block-commute", label: "Commute" },
+              { cls: "cal-block-reading", label: "Reading" },
+              { cls: "cal-block-wake", label: "Wake" },
+              { cls: "cal-block-strategy", label: "Planning" },
+              { cls: "cal-block-custom", label: "Custom" },
+            ].map((item) => (
+              <div key={item.cls} className="flex items-center gap-1">
+                <div className={cn("w-2.5 h-2.5 rounded-sm border-l-2", item.cls)} />
+                <span>{item.label}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>

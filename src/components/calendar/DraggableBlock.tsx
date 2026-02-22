@@ -46,6 +46,7 @@ export function DraggableBlock({
   const heightDelta = resizePreview?.heightDelta ?? 0;
   const finalTop = style.top + dragOffset + topDelta;
   const finalHeight = Math.max(style.height + heightDelta, 8);
+  const showText = finalHeight >= 18;
 
   return (
     <div
@@ -82,14 +83,16 @@ export function DraggableBlock({
         </div>
       )}
 
-      <div className="flex items-start gap-0.5">
-        {block.is_locked && (
-          <Lock className="h-2 w-2 shrink-0 mt-0.5 opacity-60" />
-        )}
-        <span className="text-[9px] font-medium leading-tight line-clamp-2">
-          {block.title}
-        </span>
-      </div>
+      {showText && (
+        <div className="flex items-start gap-0.5">
+          {block.is_locked && (
+            <Lock className="h-2 w-2 shrink-0 mt-0.5 opacity-60" />
+          )}
+          <span className="text-[9px] font-medium leading-tight line-clamp-2">
+            {block.title}
+          </span>
+        </div>
+      )}
 
       {isDragging && (
         <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-0.5">
