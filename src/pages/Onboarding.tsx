@@ -725,7 +725,17 @@ export default function OnboardingPage() {
       is_locked: false,
     });
 
-    await supabase.from("schedule_blocks").insert(blocks);
+    // Tag all home blocks with schedule_mode
+    const homeBlocks = blocks.map((b: any) => ({ ...b, schedule_mode: 'home' }));
+    await supabase.from("schedule_blocks").insert(homeBlocks);
+
+    // Generate on-site schedule for FIFO users
+    if (data.workType === 'fifo' && data.fifoShiftLength && data.fifoShiftType) {
+      const onSiteBlocks = generateOnSiteBlocks(user.id, data, allDays);
+      if (onSiteBlocks.length > 0) {
+        await supabase.from("schedule_blocks").insert(onSiteBlocks);
+      }
+    }
 
     if (trainingDaysData) {
       const scheduleEntries = Object.entries(trainingDayMap).map(
@@ -896,6 +906,62 @@ function addMinutes(time: string, minutes: number): string {
   const newMins = normalizedMinutes % 60;
   
   return `${newHours.toString().padStart(2, "0")}:${newMins.toString().padStart(2, "0")}`;
+}
+
+function generateOnSiteBlocks(userId: string, data: OnboardingData, allDays: number[]): any[] {
+  const blocks: any[] = [];
+  const shiftLength = data.fifoShiftLength || 12;
+  const shiftType = data.fifoShiftType || 'days';
+  const shortRoutine = 20;
+  const trainingDuration = 45; // compressed on-site session
+
+  allDays.forEach((day) => {
+    const isDayShift = shiftType === 'days' || (shiftType === 'both' && day % 2 === 0);
+
+    if (isDayShift) {
+      // Day shift: wake 05:00, shift 06:00-18:00 (or 16:00 for 10h)
+      const wakeTime = '05:00';
+      const shiftStart = '06:00';
+      const shiftEnd = shiftLength === 12 ? '18:00' : '16:00';
+      const bedtime = '21:00';
+
+      blocks.push({ user_id: userId, block_type: 'morning_routine', title: 'Morning Routine', start_time: wakeTime, end_time: addMinutes(wakeTime, shortRoutine), day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
+      blocks.push({ user_id: userId, block_type: 'work', title: 'Site Shift', start_time: shiftStart, end_time: shiftEnd, day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
+
+      // Training after shift if time allows
+      const trainingStart = addMinutes(shiftEnd, 30);
+      const trainingEnd = addMinutes(trainingStart, trainingDuration);
+      if (trainingEnd <= '20:30') {
+        blocks.push({ user_id: userId, block_type: 'training', title: 'On-Site Training', start_time: trainingStart, end_time: trainingEnd, day_of_week: day, is_locked: false, schedule_mode: 'on_site' });
+      }
+
+      blocks.push({ user_id: userId, block_type: 'evening_routine', title: 'Evening Routine', start_time: addMinutes(bedtime, -shortRoutine), end_time: bedtime, day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
+
+      const nextDay = (day + 1) % 7;
+      blocks.push({ user_id: userId, block_type: 'sleep', title: 'Sleep', start_time: bedtime, end_time: '05:00', day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
+    } else {
+      // Night shift: wake 16:00, shift 18:00-06:00 (or 04:00 for 10h), sleep 07:00-15:00
+      const wakeTime = '16:00';
+      const shiftStart = '18:00';
+      const shiftEnd = shiftLength === 12 ? '06:00' : '04:00';
+      const sleepStart = '07:00';
+      const sleepEnd = '15:00';
+
+      blocks.push({ user_id: userId, block_type: 'sleep', title: 'Sleep', start_time: sleepStart, end_time: sleepEnd, day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
+      blocks.push({ user_id: userId, block_type: 'morning_routine', title: 'Afternoon Routine', start_time: wakeTime, end_time: addMinutes(wakeTime, shortRoutine), day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
+
+      // Training before shift
+      const trainingStart = addMinutes(wakeTime, shortRoutine + 15);
+      const trainingEnd = addMinutes(trainingStart, trainingDuration);
+      if (trainingEnd <= '17:30') {
+        blocks.push({ user_id: userId, block_type: 'training', title: 'On-Site Training', start_time: trainingStart, end_time: trainingEnd, day_of_week: day, is_locked: false, schedule_mode: 'on_site' });
+      }
+
+      blocks.push({ user_id: userId, block_type: 'work', title: 'Night Shift', start_time: shiftStart, end_time: '23:59', day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
+    }
+  });
+
+  return blocks;
 }
 
 const DEFAULT_MORNING_ITEMS = [

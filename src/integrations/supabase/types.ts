@@ -646,6 +646,7 @@ export type Database = {
           end_time: string
           id: string
           is_locked: boolean | null
+          schedule_mode: string
           start_time: string
           title: string
           training_day_id: string | null
@@ -660,6 +661,7 @@ export type Database = {
           end_time: string
           id?: string
           is_locked?: boolean | null
+          schedule_mode?: string
           start_time: string
           title: string
           training_day_id?: string | null
@@ -674,6 +676,7 @@ export type Database = {
           end_time?: string
           id?: string
           is_locked?: boolean | null
+          schedule_mode?: string
           start_time?: string
           title?: string
           training_day_id?: string | null
@@ -923,6 +926,30 @@ export type Database = {
           locked_at?: string | null
           target_value?: number
           user_id?: string
+        }
+        Relationships: []
+      }
+      user_schedule_mode: {
+        Row: {
+          active_mode: string
+          created_at: string
+          id: string
+          user_id: string
+          week_start_date: string
+        }
+        Insert: {
+          active_mode?: string
+          created_at?: string
+          id?: string
+          user_id: string
+          week_start_date: string
+        }
+        Update: {
+          active_mode?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+          week_start_date?: string
         }
         Relationships: []
       }
