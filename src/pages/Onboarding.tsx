@@ -391,7 +391,7 @@ export default function OnboardingPage() {
     const gymToWorkDirect = data.gymToWorkDirect;
     const trainingDuration = 60;
     const morningRoutineMinutes = 45;
-    const isStandard = data.workType === "standard";
+    const hasWorkHours = !!(data.workStart && data.workEnd);
 
     const blocks: any[] = [];
 
@@ -403,7 +403,7 @@ export default function OnboardingPage() {
         : null;
       const isWeekday = day >= 1 && day <= 5;
       const isWeekend = !isWeekday;
-      const hasWork = isWeekday && isStandard;
+      const hasWork = isWeekday && hasWorkHours;
       const wakeTime = isWeekend ? data.weekendWakeTime : data.weekdayWakeTime;
       const bedtime = isWeekend ? data.weekendBedtime : data.bedtime;
 
