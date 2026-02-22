@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, startOfWeek, addDays, isSameDay } from "date-fns";
-import { ChevronLeft, ChevronRight, Lock, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, Plus, Trash2, Home, HardHat } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -52,6 +52,10 @@ export default function CalendarPage() {
   // Add event sheet state
   const [addEventSheetOpen, setAddEventSheetOpen] = useState(false);
 
+  // FIFO schedule mode
+  const [isFifoUser, setIsFifoUser] = useState(false);
+  const [activeMode, setActiveMode] = useState<'home' | 'on_site'>('home');
+
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
@@ -81,6 +85,50 @@ export default function CalendarPage() {
     }
   }, [user, authLoading, navigate]);
 
+  // Detect FIFO user
+  useEffect(() => {
+    const checkFifo = async () => {
+      if (!user) return;
+      const { data } = await supabase
+        .from("onboarding_data")
+        .select("work_type")
+        .eq("user_id", user.id)
+        .single();
+      setIsFifoUser(data?.work_type === 'fifo');
+    };
+    checkFifo();
+  }, [user]);
+
+  // Fetch active mode for current week
+  useEffect(() => {
+    const fetchMode = async () => {
+      if (!user || !isFifoUser) return;
+      const weekStartStr = format(weekStart, "yyyy-MM-dd");
+      const { data } = await supabase
+        .from("user_schedule_mode" as any)
+        .select("active_mode")
+        .eq("user_id", user.id)
+        .eq("week_start_date", weekStartStr)
+        .single();
+      setActiveMode((data as any)?.active_mode || 'home');
+    };
+    fetchMode();
+  }, [user, isFifoUser, weekStart]);
+
+  const toggleScheduleMode = useCallback(async (mode: 'home' | 'on_site') => {
+    if (!user) return;
+    setActiveMode(mode);
+    const weekStartStr = format(weekStart, "yyyy-MM-dd");
+    // Upsert the mode for this week
+    await supabase
+      .from("user_schedule_mode" as any)
+      .upsert({
+        user_id: user.id,
+        week_start_date: weekStartStr,
+        active_mode: mode,
+      } as any, { onConflict: 'user_id,week_start_date' });
+  }, [user, weekStart]);
+
   useEffect(() => {
     const fetchBlocks = async () => {
       if (!user) return;
@@ -91,11 +139,18 @@ export default function CalendarPage() {
         .eq("user_id", user.id)
         .order("start_time");
 
-      if (data) setBlocks(data);
+      if (data) {
+        // Filter by schedule mode client-side for FIFO users
+        if (isFifoUser) {
+          setBlocks(data.filter((b: any) => (b as any).schedule_mode === activeMode || !(b as any).schedule_mode));
+        } else {
+          setBlocks(data);
+        }
+      }
     };
 
     fetchBlocks();
-  }, [user]);
+  }, [user, isFifoUser, activeMode]);
 
   // Fetch overrides for the current week
   useEffect(() => {
@@ -333,6 +388,38 @@ export default function CalendarPage() {
             </Button>
           </div>
         </div>
+
+        {/* FIFO Schedule Mode Toggle */}
+        {isFifoUser && (
+          <div className="px-4 py-2 border-b border-border/50 shrink-0">
+            <div className="flex items-center justify-center gap-1 bg-muted/50 rounded-lg p-1">
+              <button
+                onClick={() => toggleScheduleMode('home')}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                  activeMode === 'home'
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Home className="h-3.5 w-3.5" />
+                Home
+              </button>
+              <button
+                onClick={() => toggleScheduleMode('on_site')}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                  activeMode === 'on_site'
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <HardHat className="h-3.5 w-3.5" />
+                On-Site
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Week Header */}
         <div className="flex border-b border-border/50 shrink-0">
