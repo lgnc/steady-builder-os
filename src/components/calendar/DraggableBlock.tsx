@@ -51,7 +51,7 @@ export function DraggableBlock({
   return (
     <div
       className={cn(
-        "absolute left-0.5 right-0.5 rounded-md border-l-2 px-1 py-0.5 overflow-hidden cursor-pointer select-none group",
+        "absolute left-0.5 right-0.5 rounded-sm border-l-2 px-1 py-0.5 overflow-hidden cursor-pointer select-none group",
         "shadow-sm hover:shadow-md transition-shadow duration-200",
         colorClass,
         isDragging
