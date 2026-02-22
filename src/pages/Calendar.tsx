@@ -398,9 +398,8 @@ export default function CalendarPage() {
     return { top, height };
   };
 
-  // For sleep blocks that cross midnight, generate a morning portion (00:00 → wake)
-  const getSleepMorningStyle = (block: ScheduleBlock) => {
-    if (block.block_type !== "sleep") return null;
+  // For blocks that cross midnight, generate a morning portion (00:00 → end_time) on the next day
+  const getOvernightMorningStyle = (block: ScheduleBlock) => {
     const startHour = parseTime(block.start_time);
     const endHour = parseTime(block.end_time);
     if (endHour >= startHour) return null; // doesn't cross midnight
@@ -559,26 +558,32 @@ export default function CalendarPage() {
                     />
                   ))}
 
-                  {/* Morning sleep portion from previous day's sleep block */}
+                  {/* Morning continuation from previous day's overnight blocks (sleep, work) */}
                   {(() => {
-                    const prevDayIndex = (day.getDay() + 6) % 7; // previous day
-                    const prevDaySleep = effectiveBlocks.find(
-                      (b) => b.day_of_week === prevDayIndex && b.block_type === "sleep"
+                    const prevDayIndex = (day.getDay() + 6) % 7;
+                    const overnightBlocks = effectiveBlocks.filter(
+                      (b) => b.day_of_week === prevDayIndex && 
+                             (b.block_type === "sleep" || b.block_type === "work") &&
+                             parseTime(b.end_time) < parseTime(b.start_time) // crosses midnight
                     );
-                    if (!prevDaySleep) return null;
-                    const morningStyle = getSleepMorningStyle(prevDaySleep);
-                    if (!morningStyle) return null;
-                    return (
-                      <div
-                        className={cn(
-                          "absolute left-0.5 right-0.5 rounded-[2px] border-l-2 px-1 overflow-hidden pointer-events-none opacity-70",
-                          getBlockColor("sleep")
-                        )}
-                        style={{ top: morningStyle.top, height: morningStyle.height, zIndex: 1 }}
-                      >
-                        <span className="text-[8px] font-medium truncate block mt-0.5">Sleep</span>
-                      </div>
-                    );
+                    return overnightBlocks.map((block) => {
+                      const morningStyle = getOvernightMorningStyle(block);
+                      if (!morningStyle) return null;
+                      return (
+                        <div
+                          key={`overnight-${block.id}`}
+                          className={cn(
+                            "absolute left-0.5 right-0.5 rounded-[2px] border-l-2 px-1 overflow-hidden pointer-events-none opacity-70",
+                            getBlockColor(block.block_type)
+                          )}
+                          style={{ top: morningStyle.top, height: morningStyle.height, zIndex: 1 }}
+                        >
+                          <span className="text-[8px] font-medium truncate block mt-0.5">
+                            {block.title}
+                          </span>
+                        </div>
+                      );
+                    });
                   })()}
 
                   {/* Schedule blocks */}
@@ -873,7 +878,7 @@ function generateOnSiteBlocksFromConfig(
         blocks.push({ user_id: userId, block_type: 'training', title: 'On-Site Training', start_time: trainingStart, end_time: trainingEnd, day_of_week: day, is_locked: false, schedule_mode: 'on_site' });
       }
 
-      blocks.push({ user_id: userId, block_type: 'work', title: 'Night Shift', start_time: config.shiftStart, end_time: '23:59', day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
+      blocks.push({ user_id: userId, block_type: 'work', title: 'Night Shift', start_time: config.shiftStart, end_time: config.shiftEnd, day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
     }
   });
 
