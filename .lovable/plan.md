@@ -1,39 +1,39 @@
 
 
-## "Building Your Plan" Loading Screen
+## Add "Bonus Material" Resources Section to Dashboard
 
-### Overview
-After tapping "Install Structure" on the final onboarding step, a full-screen animated loading sequence will play while the backend work runs in parallel. The screen creates a premium "labor illusion" -- making the system feel like it's doing serious, personalised work.
+### What it does
+Adds a curated resources section below the Anchors on the dashboard. It's a low-key, visually distinct card area that links out to longer-form content -- the Peak Performance Protocol program, community links, guides, and other resources you want to surface to users.
 
-### The User Experience
-- User taps "Install Structure" on step 13
-- Screen transitions to a dark, full-screen loading view
-- 5 personalised stages animate in sequence, each lasting ~3 seconds (~15 seconds total)
-- A smooth progress bar advances across the bottom
-- Once both the animation AND backend work are complete, the user is taken to the dashboard
+### Placement
+After "Today's Anchors" and before the CoachChat FAB, sitting as the final content section on the dashboard scroll.
 
-### The 5 Stages (personalised to user inputs)
-1. "Analysing your schedule..." (references work hours if provided)
-2. "Building your training blocks..." (references selected program)
-3. "Placing sessions around your commitments..." (references training window)
-4. "Calibrating your 8-week targets..." (references goal count)
-5. "Finalising your operating system..."
+### Design
+- A subtle section header: "Resources" or "Go Deeper"
+- 3-4 resource cards in a vertical list, each with:
+  - An icon (e.g. BookOpen, Users, ExternalLink, Sparkles)
+  - Title (e.g. "Peak Performance Protocol")
+  - One-line description
+  - Taps open an external link or internal route
+- Uses the existing `card-stat` styling to stay visually consistent but clearly secondary to the action-oriented content above
+- Slightly lower opacity/muted treatment so it doesn't compete with execution items
 
-Each line fades in with a subtle upward motion, holds, then fades out before the next appears. A pulsing icon (Loader2) gives a sense of active processing.
+### Technical Details
 
-### Files Changed
+**New file: `src/components/dashboard/BonusMaterial.tsx`**
+- A simple component rendering a list of resource links
+- Each resource defined as a static array of objects: `{ icon, title, description, url }`
+- Links open in a new tab (`target="_blank"`) for external URLs
+- Uses `motion.div` for consistent fade-in animation matching the rest of the dashboard
+- Easy to update -- just edit the array to add/remove/reorder links
 
-**New file: `src/components/onboarding/BuildingPlanScreen.tsx`**
-- Full-screen component using framer-motion for stage transitions
-- Accepts `onComplete` callback and `data` prop (to personalise messages)
-- Cycles through 5 stages on a 3-second timer
-- Renders the existing `ProgressBar` component advancing smoothly
-- Calls `onComplete` after all stages finish
+**Modified file: `src/pages/Dashboard.tsx`**
+- Import and render `<BonusMaterial />` after the Anchors section (after line 613, before the closing `</div>`)
+- Wrapped in a `motion.section` with a slightly later delay to animate in after anchors
 
-**Modified file: `src/pages/Onboarding.tsx`**
-- Add `showBuildingScreen` boolean state
-- In `completeOnboarding()`: after saving onboarding data, set `showBuildingScreen = true` and kick off backend work (`generateSchedule`, `seedHabits`, etc.) in parallel, storing a `backendDone` ref when they finish
-- In the render: when `showBuildingScreen` is true, render `BuildingPlanScreen` instead of the step UI
-- The `onComplete` callback checks `backendDone` -- if backend is still running, it waits; otherwise navigates to `/dashboard`
-- The toast ("Structure installed") fires on navigation, not during the loading screen
+### Example Resource Items (editable later)
+1. "Peak Performance Protocol" -- link to program overview
+2. "Join the Community" -- link to Discord/community
+3. "Training Guides" -- link to resource library
+4. "Weekly Newsletter" -- link to subscribe or archive
 
