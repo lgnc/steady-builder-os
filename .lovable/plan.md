@@ -1,52 +1,42 @@
 
 
-# Calendar Aesthetic: Monochromatic Warmth
+# Softer Solid Calendar Blocks
 
-## Design Philosophy
+## What Changes
 
-Replace the current transparent gradient-glass blocks with **solid, opaque surfaces** using warm charcoal/stone tonal shifts. No colour coding — block types are distinguished purely through subtle shade differences, border weight, and typography. Think high-end watch interface or premium dark-mode productivity app.
+The current monochromatic warmth palette is close but the blocks still feel a bit harsh. This update softens all block colours to be gentler on the eye -- think muted, earthy tones that sit quietly on the dark background without drawing too much attention.
 
-## The Palette
+## Updated Colour Values
 
-All blocks sit within a tight warm-charcoal range (HSL hue ~20-30, low saturation 8-14%), differentiated only by lightness:
+All blocks remain solid (no gradients, no transparency, no blur). The key change is slightly lower saturation and gentler lightness values across the board:
 
-| Block Type | Lightness Level | Feel |
-|---|---|---|
-| Training | Lightest (~18-20%) | Stands out as the "hero" block |
-| Morning/Evening Routine | Medium-light (~14-16%) | Clearly visible, secondary importance |
-| Strategy/Reading | Medium (~12-14%) | Intellectual/planning activities |
-| Work | Medium-dark (~10-12%) | Recedes — it's the backdrop of the day |
-| Commute/Custom | Medium (~11-13%) | Neutral utility |
-| Sleep | Darkest (~7-9%) | Almost blends with background — restful |
-| Wake | Medium-light (~15%) | Marks the start of the day |
+| Block Type | Background | Border | Text |
+|---|---|---|---|
+| Training (planned) | `hsl(25 8% 17%)` | `hsl(25 8% 23%)` | `hsl(40 15% 88%)` |
+| Training (active) | `hsl(194 20% 16%)` | `hsl(194 35% 28%)` | `hsl(194 30% 86%)` |
+| Training (done) | `hsl(194 25% 14%)` | `hsl(194 50% 35%)` | `hsl(194 40% 90%)` |
+| Morning routine | `hsl(28 7% 14%)` | `hsl(28 7% 20%)` | `hsl(40 12% 85%)` |
+| Evening routine | `hsl(25 7% 13%)` | `hsl(25 7% 19%)` | `hsl(40 12% 85%)` |
+| Work | `hsl(26 6% 10%)` | `hsl(26 6% 15%)` | `hsl(40 10% 78%)` |
+| Reading | `hsl(24 7% 12%)` | `hsl(24 7% 17%)` | `hsl(40 10% 80%)` |
+| Wake | `hsl(28 7% 14%)` | `hsl(28 7% 20%)` | `hsl(40 12% 85%)` |
+| Sleep | `hsl(24 6% 7%)` | `hsl(24 6% 11%)` | `hsl(40 8% 70%)` |
+| Commute | `hsl(26 6% 11%)` | `hsl(26 6% 16%)` | `hsl(40 10% 78%)` |
+| Custom | `hsl(25 6% 11%)` | `hsl(25 6% 16%)` | `hsl(40 10% 79%)` |
+| Strategy | `hsl(27 7% 12%)` | `hsl(27 7% 17%)` | `hsl(40 10% 82%)` |
+| Default | `hsl(25 6% 10%)` | `hsl(25 6% 15%)` | `hsl(40 10% 76%)` |
 
-Text colour stays consistently warm white (~85-94% lightness) for legibility. Left borders use a slightly brighter version of the block's own shade (no accent colours).
+Key differences from current values:
+- Saturation dropped from 9-12% to 6-8% (softer, less warm)
+- Text lightness pulled back slightly (less bright white, more muted cream)
+- Training active/done cyan toned down (saturation 20-25% instead of 30-35%)
+- Glow shadow on active training reduced
 
-The **only colour** that appears is the existing cyan accent on **training blocks once completed** — this acts as the earned "reward" colour, making completion feel meaningful.
+## Files Changed
 
-## Technical Changes
+### 1. `src/index.css` (lines 210-276)
+Replace all `.cal-block-*` class values with the softer palette above. No structural changes -- just updated HSL values.
 
-### 1. `src/index.css` — Replace all `.cal-block-*` classes (lines 211-289)
-
-Replace every glass-gradient class with solid warm-charcoal backgrounds:
-
-- Remove all `backdrop-filter: blur(8px)` (no more transparency)
-- Replace `linear-gradient` with solid `background` colours using the warm-charcoal HSL values
-- Set `border-color` to a slightly lighter version of the background (subtle, not glowing)
-- Set `color` to warm white for all blocks
-- Keep `.cal-block-training-done` as the only class with cyan colouring (the reward state)
-- Keep `.cal-block-training-active` with a hint of cyan (in-progress feedback)
-
-### 2. `src/components/calendar/DraggableBlock.tsx` — Minor hover refinement
-
-- Adjust hover state from `brightness-110` to `brightness-105` for subtler, more premium hover feedback
-- The existing shadow and scale transitions stay as-is
-
-### 3. No changes to `Calendar.tsx`
-
-The `getBlockColor` function and all block rendering logic stays identical — only the CSS classes it references change.
-
-## Result
-
-The calendar will feel like a solid, tactile surface — blocks look like they're carved from the same material at different depths rather than floating transparent panels. Training completion remains the only moment of colour, making progress feel earned and visually rewarding.
+### 2. No other files change
+The `getBlockColor` function and `DraggableBlock` component remain untouched.
 
