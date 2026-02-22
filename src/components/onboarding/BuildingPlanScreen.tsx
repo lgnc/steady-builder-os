@@ -31,18 +31,20 @@ function getStages(data: OnboardingData): { headline: string; detail: string }[]
   const goalCount =
     (data.primaryGoals?.length ?? 0) + (data.secondaryGoals?.length ?? 0);
 
+  const isFifo = data.workType === "fifo";
+
   return [
     {
-      headline: "Analysing your schedule",
-      detail: `Mapping around ${workLabel}`,
+      headline: isFifo ? "Analysing your home schedule" : "Analysing your schedule",
+      detail: isFifo ? "Mapping your home-period routine" : `Mapping around ${workLabel}`,
     },
     {
       headline: "Building your training blocks",
       detail: `Loading ${programLabel}`,
     },
     {
-      headline: "Placing sessions around your commitments",
-      detail: `Prioritising ${windowLabel} windows`,
+      headline: isFifo ? "Building your home routine" : "Placing sessions around your commitments",
+      detail: isFifo ? "On-site mode available from your calendar" : `Prioritising ${windowLabel} windows`,
     },
     {
       headline: "Calibrating your 8-week targets",

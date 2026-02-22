@@ -37,7 +37,7 @@ export function WorkTypeStep({ data, updateData }: WorkTypeStepProps) {
       <div className="space-y-2">
         <h2 className="text-2xl font-semibold tracking-tight">How Do You Work?</h2>
         <p className="text-muted-foreground">
-          Your work pattern shapes everything else. Let's get this right.
+          This shapes your entire onboarding — sleep, schedule, and training will all adapt to your answer.
         </p>
       </div>
 
