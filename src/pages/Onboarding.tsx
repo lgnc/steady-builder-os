@@ -44,6 +44,7 @@ export interface OnboardingData {
   preferredTrainingWindow: "morning" | "afternoon" | "evening";
   restDays: string[];
   preferredTrainingDays: string[];
+  workDays: string[];
   
   // FIFO
   fifoShiftLength: number | null;
@@ -130,6 +131,7 @@ const defaultData: OnboardingData = {
   preferredTrainingWindow: "morning",
   restDays: [],
   preferredTrainingDays: [],
+  workDays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
   fifoShiftLength: null,
   fifoShiftType: null,
   gymCommuteMinutes: 15,
@@ -282,6 +284,7 @@ export default function OnboardingPage() {
           preferred_training_window: data.preferredTrainingWindow,
           rest_days: data.restDays,
           preferred_training_days: data.preferredTrainingDays,
+          work_days: data.workDays,
           fifo_shift_length: data.fifoShiftLength,
           fifo_shift_type: data.fifoShiftType,
           gym_commute_minutes: data.gymCommuteMinutes,
@@ -454,7 +457,8 @@ export default function OnboardingPage() {
         : null;
       const isWeekday = day >= 1 && day <= 5;
       const isWeekend = !isWeekday;
-      const hasWork = isWeekday && hasWorkHours;
+      const dayName = getDayName(day).toLowerCase();
+      const hasWork = data.workDays.includes(dayName) && hasWorkHours;
       const wakeTime = isWeekend ? data.weekendWakeTime : data.weekdayWakeTime;
       const bedtime = isWeekend ? data.weekendBedtime : data.bedtime;
 
