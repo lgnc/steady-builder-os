@@ -1,0 +1,1 @@
+ALTER TABLE public.onboarding_data ADD COLUMN work_days text[] DEFAULT ARRAY['monday','tuesday','wednesday','thursday','friday']::text[];

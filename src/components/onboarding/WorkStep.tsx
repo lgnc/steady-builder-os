@@ -27,6 +27,13 @@ const daysOfWeek = [
 
 
 export function WorkStep({ data, updateData }: WorkStepProps) {
+  const toggleWorkDay = (day: string) => {
+    const newWorkDays = data.workDays.includes(day)
+      ? data.workDays.filter((d) => d !== day)
+      : [...data.workDays, day];
+    updateData({ workDays: newWorkDays });
+  };
+
   const toggleRestDay = (day: string) => {
     const newRestDays = data.restDays.includes(day)
       ? data.restDays.filter((d) => d !== day)
@@ -99,6 +106,33 @@ export function WorkStep({ data, updateData }: WorkStepProps) {
               checked={data.flexibleWork}
               onCheckedChange={(checked) => updateData({ flexibleWork: checked })}
             />
+          </div>
+        )}
+
+        {/* Work Days — for standard workers */}
+        {isStandard && (
+          <div className="space-y-3">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <Briefcase className="h-4 w-4 text-primary" />
+              Which days do you work?
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {daysOfWeek.map((day) => (
+                <button
+                  key={day.value}
+                  onClick={() => toggleWorkDay(day.value)}
+                  className={cn(
+                    "px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                    data.workDays.includes(day.value)
+                      ? "bg-primary/10 text-primary border border-primary/20"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  )}
+                >
+                  {day.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">Select the days you typically work these hours.</p>
           </div>
         )}
 

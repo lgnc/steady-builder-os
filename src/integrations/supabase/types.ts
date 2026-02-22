@@ -374,6 +374,7 @@ export type Database = {
           weekend_bedtime: string | null
           weekend_wake_time: string | null
           weight_kg: number | null
+          work_days: string[] | null
           work_end: string | null
           work_start: string | null
           work_to_gym_minutes: number
@@ -425,6 +426,7 @@ export type Database = {
           weekend_bedtime?: string | null
           weekend_wake_time?: string | null
           weight_kg?: number | null
+          work_days?: string[] | null
           work_end?: string | null
           work_start?: string | null
           work_to_gym_minutes?: number
@@ -476,6 +478,7 @@ export type Database = {
           weekend_bedtime?: string | null
           weekend_wake_time?: string | null
           weight_kg?: number | null
+          work_days?: string[] | null
           work_end?: string | null
           work_start?: string | null
           work_to_gym_minutes?: number
