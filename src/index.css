@@ -229,9 +229,9 @@
     color: hsl(42 40% 95%);
   }
   .cal-block-evening {
-    background: hsl(270 40% 34%);
-    border-color: hsl(270 48% 44%);
-    color: hsl(270 28% 95%);
+    background: hsl(280 40% 34%);
+    border-color: hsl(280 48% 44%);
+    color: hsl(280 28% 95%);
   }
   .cal-block-work {
     background: hsl(215 38% 30%);
@@ -239,34 +239,34 @@
     color: hsl(215 28% 94%);
   }
   .cal-block-reading {
-    background: hsl(22 40% 30%);
-    border-color: hsl(22 48% 40%);
-    color: hsl(22 30% 94%);
+    background: hsl(15 42% 30%);
+    border-color: hsl(15 50% 40%);
+    color: hsl(15 32% 94%);
   }
   .cal-block-wake {
-    background: hsl(35 50% 34%);
-    border-color: hsl(35 58% 44%);
-    color: hsl(35 35% 95%);
+    background: hsl(50 52% 34%);
+    border-color: hsl(50 60% 44%);
+    color: hsl(50 38% 95%);
   }
   .cal-block-sleep {
-    background: hsl(235 32% 22%);
-    border-color: hsl(235 38% 32%);
-    color: hsl(235 22% 82%);
+    background: hsl(240 32% 22%);
+    border-color: hsl(240 38% 32%);
+    color: hsl(240 22% 82%);
   }
   .cal-block-commute {
-    background: hsl(195 32% 28%);
-    border-color: hsl(195 40% 38%);
-    color: hsl(195 24% 92%);
+    background: hsl(195 35% 28%);
+    border-color: hsl(195 42% 38%);
+    color: hsl(195 26% 92%);
   }
   .cal-block-custom {
-    background: hsl(340 38% 34%);
-    border-color: hsl(340 46% 44%);
-    color: hsl(340 28% 95%);
+    background: hsl(340 40% 34%);
+    border-color: hsl(340 48% 44%);
+    color: hsl(340 30% 95%);
   }
   .cal-block-strategy {
-    background: hsl(85 35% 30%);
-    border-color: hsl(85 42% 40%);
-    color: hsl(85 25% 94%);
+    background: hsl(100 35% 30%);
+    border-color: hsl(100 42% 40%);
+    color: hsl(100 25% 94%);
   }
   .cal-block-default {
     background: hsl(25 18% 24%);
