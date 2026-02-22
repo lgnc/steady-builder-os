@@ -423,7 +423,7 @@ export default function CalendarPage() {
                     return (
                       <div
                         className={cn(
-                          "absolute left-0.5 right-0.5 rounded-sm border-l-2 px-1 overflow-hidden pointer-events-none opacity-70",
+                          "absolute left-0.5 right-0.5 rounded-[2px] border-l-2 px-1 overflow-hidden pointer-events-none opacity-70",
                           getBlockColor("sleep")
                         )}
                         style={{ top: morningStyle.top, height: morningStyle.height, zIndex: 1 }}

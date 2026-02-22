@@ -671,13 +671,17 @@ export default function OnboardingPage() {
         is_locked: true,
       });
 
-      // Sleep
+      // Sleep — end_time uses the NEXT day's wake time (you wake up the next morning)
+      const nextDay = (day + 1) % 7;
+      const nextDayIsWeekday = nextDay >= 1 && nextDay <= 5;
+      const nextDayWakeTime = nextDayIsWeekday ? data.weekdayWakeTime : data.weekendWakeTime;
+
       blocks.push({
         user_id: user.id,
         block_type: "sleep",
         title: "Sleep",
         start_time: bedtime,
-        end_time: wakeTime,
+        end_time: nextDayWakeTime,
         day_of_week: day,
         is_locked: true,
       });
