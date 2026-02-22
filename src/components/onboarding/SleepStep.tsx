@@ -24,9 +24,13 @@ export function SleepStep({ data, updateData, showWarning, onDismissWarning }: S
   return (
     <div className="space-y-8">
       <div className="space-y-2">
-        <h2 className="text-2xl font-semibold tracking-tight">Sleep & Recovery</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">
+          {data.workType === "fifo" ? "Sleep & Recovery (Home)" : "Sleep & Recovery"}
+        </h2>
         <p className="text-muted-foreground">
-          Sleep is the foundation. Everything else depends on this.
+          {data.workType === "fifo"
+            ? "Set your home-period sleep schedule. We'll handle on-site separately."
+            : "Sleep is the foundation. Everything else depends on this."}
         </p>
       </div>
 

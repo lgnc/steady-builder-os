@@ -107,15 +107,17 @@ export function ReviewStep({ data, eightWeekGoals = [] }: ReviewStepProps) {
                 <span className="font-medium">{data.workStart} - {data.workEnd}</span>
               </div>
             )}
-            {data.workType === "fifo" && data.fifoShiftLength && (
+            {data.workType === "fifo" && (
               <>
+                {data.fifoShiftLength && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">On-site shift</span>
+                    <span className="font-medium">{data.fifoShiftLength}h {data.fifoShiftType ? `(${data.fifoShiftType})` : ""}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Shift length</span>
-                  <span className="font-medium">{data.fifoShiftLength}h</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Shift type</span>
-                  <span className="font-medium capitalize">{data.fifoShiftType}</span>
+                  <span className="text-muted-foreground">Schedule mode</span>
+                  <span className="font-medium">Home routine (toggle on-site from calendar)</span>
                 </div>
               </>
             )}

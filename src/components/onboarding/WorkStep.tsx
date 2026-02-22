@@ -25,16 +25,6 @@ const daysOfWeek = [
   { value: "saturday", label: "Sat" },
 ];
 
-const shiftLengths = [
-  { value: 10, label: "10 hours" },
-  { value: 12, label: "12 hours" },
-];
-
-const shiftTypes = [
-  { value: "days", label: "Days" },
-  { value: "nights", label: "Nights" },
-  { value: "both", label: "Both" },
-];
 
 export function WorkStep({ data, updateData }: WorkStepProps) {
   const toggleRestDay = (day: string) => {
@@ -122,58 +112,13 @@ export function WorkStep({ data, updateData }: WorkStepProps) {
           </div>
         )}
 
-        {/* FIFO info + on-site fields */}
+        {/* FIFO home-period note */}
         {isFifo && (
-          <div className="space-y-4">
-            <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
-              <p className="text-sm text-muted-foreground">
-                🔄 We'll build your schedule for your home period first.
-                You can toggle between <span className="font-medium text-foreground">home</span> and <span className="font-medium text-foreground">on-site</span> modes
-                from the calendar to switch your routine.
-              </p>
-            </div>
-
-            {/* FIFO Shift Length */}
-            <div className="space-y-3">
-              <label className="text-sm font-medium">On-site shift length</label>
-              <div className="grid grid-cols-2 gap-2">
-                {shiftLengths.map((sl) => (
-                  <button
-                    key={sl.value}
-                    onClick={() => updateData({ fifoShiftLength: sl.value })}
-                    className={cn(
-                      "p-3 rounded-lg border text-sm font-medium transition-all duration-200",
-                      data.fifoShiftLength === sl.value
-                        ? "bg-primary/10 border-primary text-foreground"
-                        : "bg-muted/50 border-border text-muted-foreground hover:bg-muted"
-                    )}
-                  >
-                    {sl.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* FIFO Shift Type */}
-            <div className="space-y-3">
-              <label className="text-sm font-medium">On-site shift type</label>
-              <div className="grid grid-cols-2 gap-2">
-                {shiftTypes.map((st) => (
-                  <button
-                    key={st.value}
-                    onClick={() => updateData({ fifoShiftType: st.value })}
-                    className={cn(
-                      "p-3 rounded-lg border text-sm font-medium transition-all duration-200",
-                      data.fifoShiftType === st.value
-                        ? "bg-primary/10 border-primary text-foreground"
-                        : "bg-muted/50 border-border text-muted-foreground hover:bg-muted"
-                    )}
-                  >
-                    {st.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+          <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
+            <p className="text-sm text-muted-foreground">
+              🏠 These preferences apply to your <span className="font-medium text-foreground">home period</span>.
+              Your on-site details were captured in the previous step.
+            </p>
           </div>
         )}
 

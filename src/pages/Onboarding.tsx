@@ -13,6 +13,7 @@ import { BuildingPlanScreen } from "@/components/onboarding/BuildingPlanScreen";
 import { SleepStep } from "@/components/onboarding/SleepStep";
 import { WorkTypeStep } from "@/components/onboarding/WorkTypeStep";
 import { WorkStep } from "@/components/onboarding/WorkStep";
+import { FifoSiteStep } from "@/components/onboarding/FifoSiteStep";
 import { GymCommuteStep } from "@/components/onboarding/GymCommuteStep";
 import { TrainingStep } from "@/components/onboarding/TrainingStep";
 import { ProgramStep } from "@/components/onboarding/ProgramStep";
@@ -89,7 +90,31 @@ export interface OnboardingData {
   habitsBreak: string[];
 }
 
-const TOTAL_STEPS = 13;
+function getTotalSteps(workType: OnboardingData["workType"]): number {
+  return workType === "fifo" ? 14 : 13;
+}
+
+function getStepTitles(workType: OnboardingData["workType"]): string[] {
+  const common = [
+    "Work Type",
+    "Sleep & Recovery",
+  ];
+  const fifoExtra = ["FIFO Site Details"];
+  const rest = [
+    "Work & Availability",
+    "Planning Ritual",
+    "Your Commutes",
+    "Training Experience",
+    "Select Program",
+    "Your Goals",
+    "8-Week Goals",
+    "Current State",
+    "Body & Nutrition",
+    "Habits",
+    "Review & Install",
+  ];
+  return workType === "fifo" ? [...common, ...fifoExtra, ...rest] : [...common, ...rest];
+}
 
 const defaultData: OnboardingData = {
   weekdayWakeTime: "06:00",
@@ -206,12 +231,14 @@ export default function OnboardingPage() {
   }, [data.weekendWakeTime, data.sleepDuration]);
 
   const handleNext = async () => {
-    if (step === 1 && data.sleepDuration < 7) {
+    if (step === 2 && data.sleepDuration < 7) {
       setShowSleepWarning(true);
       return;
     }
+
+    const totalSteps = getTotalSteps(data.workType);
     
-    if (step < TOTAL_STEPS) {
+    if (step < totalSteps) {
       const nextStep = step + 1;
       setStep(nextStep);
       
@@ -282,7 +309,7 @@ export default function OnboardingPage() {
           onboarding_habits_build: data.habitsBuild,
           onboarding_habits_break: data.habitsBreak,
           onboarding_completed: true,
-          onboarding_step: TOTAL_STEPS,
+          onboarding_step: getTotalSteps(data.workType),
         } as any)
         .eq("user_id", user.id);
 
@@ -741,21 +768,42 @@ export default function OnboardingPage() {
     return <BuildingPlanScreen data={data} onComplete={handleBuildingComplete} />;
   }
 
-  const stepTitles = [
-    "Sleep & Recovery",
-    "Work Type",
-    "Work & Time",
-    "Planning Ritual",
-    "Your Commutes",
-    "Training Experience",
-    "Select Program",
-    "Your Goals",
-    "8-Week Goals",
-    "Current State",
-    "Body & Nutrition",
-    "Habits",
-    "Review & Install",
-  ];
+  const totalSteps = getTotalSteps(data.workType);
+  const stepTitles = getStepTitles(data.workType);
+
+  // Map step number to the correct component based on work type
+  const isFifo = data.workType === "fifo";
+  const renderStep = () => {
+    // Step 1 is always WorkType
+    if (step === 1) return <WorkTypeStep data={data} updateData={updateData} />;
+    // Step 2 is always Sleep
+    if (step === 2) return (
+      <SleepStep
+        data={data}
+        updateData={updateData}
+        showWarning={showSleepWarning}
+        onDismissWarning={() => setShowSleepWarning(false)}
+      />
+    );
+    // For FIFO, step 3 is the site details step; for others, step 3 is Work & Availability
+    // We use an offset: FIFO steps are shifted by 1 after step 3
+    const offset = isFifo ? 1 : 0;
+    if (isFifo && step === 3) return <FifoSiteStep data={data} updateData={updateData} />;
+    
+    const adjusted = step - offset;
+    if (adjusted === 3) return <WorkStep data={data} updateData={updateData} />;
+    if (adjusted === 4) return <StrategyStep data={data} updateData={updateData} />;
+    if (adjusted === 5) return <GymCommuteStep data={data} updateData={updateData} />;
+    if (adjusted === 6) return <TrainingStep data={data} updateData={updateData} />;
+    if (adjusted === 7) return <ProgramStep data={data} updateData={updateData} />;
+    if (adjusted === 8) return <GoalsStep data={data} updateData={updateData} />;
+    if (adjusted === 9) return <EightWeekGoalsStep goals={eightWeekGoals} onGoalsChange={setEightWeekGoals} data={data} />;
+    if (adjusted === 10) return <FrictionStep data={data} updateData={updateData} />;
+    if (adjusted === 11) return <NutritionStep data={data} updateData={updateData} />;
+    if (adjusted === 12) return <HabitsStep data={data} updateData={updateData} />;
+    if (adjusted === 13) return <ReviewStep data={data} eightWeekGoals={eightWeekGoals} />;
+    return null;
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -763,11 +811,11 @@ export default function OnboardingPage() {
         <div className="max-w-md mx-auto space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">
-              Step {step} of {TOTAL_STEPS}
+              Step {step} of {totalSteps}
             </span>
             <span className="text-sm font-medium">{stepTitles[step - 1]}</span>
           </div>
-          <ProgressBar value={step} max={TOTAL_STEPS} />
+          <ProgressBar value={step} max={totalSteps} />
         </div>
       </header>
 
@@ -781,26 +829,8 @@ export default function OnboardingPage() {
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
             >
-              {step === 1 && (
-                <SleepStep
-                  data={data}
-                  updateData={updateData}
-                  showWarning={showSleepWarning}
-                  onDismissWarning={() => setShowSleepWarning(false)}
-                />
-              )}
-              {step === 2 && <WorkTypeStep data={data} updateData={updateData} />}
-              {step === 3 && <WorkStep data={data} updateData={updateData} />}
-              {step === 4 && <StrategyStep data={data} updateData={updateData} />}
-              {step === 5 && <GymCommuteStep data={data} updateData={updateData} />}
-              {step === 6 && <TrainingStep data={data} updateData={updateData} />}
-              {step === 7 && <ProgramStep data={data} updateData={updateData} />}
-              {step === 8 && <GoalsStep data={data} updateData={updateData} />}
-              {step === 9 && <EightWeekGoalsStep goals={eightWeekGoals} onGoalsChange={setEightWeekGoals} data={data} />}
-              {step === 10 && <FrictionStep data={data} updateData={updateData} />}
-              {step === 11 && <NutritionStep data={data} updateData={updateData} />}
-              {step === 12 && <HabitsStep data={data} updateData={updateData} />}
-              {step === 13 && <ReviewStep data={data} eightWeekGoals={eightWeekGoals} />}
+              {renderStep()}
+
             </motion.div>
           </AnimatePresence>
         </div>
@@ -825,7 +855,7 @@ export default function OnboardingPage() {
           >
             {loading ? (
               "Installing..."
-            ) : step === TOTAL_STEPS ? (
+            ) : step === totalSteps ? (
               <>
                 <Check className="h-4 w-4" />
                 Install Structure
