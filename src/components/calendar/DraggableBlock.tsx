@@ -50,13 +50,14 @@ export function DraggableBlock({
   return (
     <div
       className={cn(
-        "absolute left-0.5 right-0.5 rounded-sm border-l-2 px-0.5 py-0.5 overflow-hidden cursor-pointer select-none group",
+        "absolute left-0.5 right-0.5 rounded-md border-l-2 px-1 py-0.5 overflow-hidden cursor-pointer select-none group",
+        "shadow-sm hover:shadow-md transition-shadow duration-200",
         colorClass,
         isDragging
-          ? "z-50 shadow-2xl ring-2 ring-primary/50 scale-[1.03]"
+          ? "z-50 shadow-2xl ring-1 ring-white/20 scale-[1.03] brightness-110"
           : isResizing
-          ? "z-50 shadow-2xl ring-2 ring-primary/50"
-          : "hover:z-10 hover:shadow-lg animate-scale-in"
+          ? "z-50 shadow-2xl ring-1 ring-white/20"
+          : "hover:z-10 hover:brightness-110 animate-scale-in"
       )}
       style={{
         top: finalTop,

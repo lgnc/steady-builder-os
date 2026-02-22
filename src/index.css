@@ -206,6 +206,87 @@
   .time-block-sleep {
     @apply bg-info/10 border-l-info text-info-foreground;
   }
+
+  /* Calendar Block Glass Styles */
+  .cal-block-training {
+    background: linear-gradient(135deg, hsl(194 90% 54% / 0.18) 0%, hsl(194 90% 40% / 0.08) 100%);
+    border-color: hsl(194 90% 54% / 0.5);
+    color: hsl(194 80% 75%);
+    backdrop-filter: blur(8px);
+  }
+  .cal-block-training-active {
+    background: linear-gradient(135deg, hsl(194 90% 54% / 0.35) 0%, hsl(194 90% 40% / 0.15) 100%);
+    border-color: hsl(194 90% 54%);
+    color: hsl(194 80% 90%);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 0 12px hsl(194 90% 54% / 0.2);
+  }
+  .cal-block-training-done {
+    background: linear-gradient(135deg, hsl(194 90% 54% / 0.45) 0%, hsl(194 80% 45% / 0.2) 100%);
+    border-color: hsl(194 90% 54%);
+    color: hsl(194 80% 95%);
+    backdrop-filter: blur(8px);
+  }
+  .cal-block-morning {
+    background: linear-gradient(135deg, hsl(45 80% 55% / 0.15) 0%, hsl(35 70% 45% / 0.06) 100%);
+    border-color: hsl(45 80% 55% / 0.5);
+    color: hsl(45 70% 75%);
+    backdrop-filter: blur(8px);
+  }
+  .cal-block-evening {
+    background: linear-gradient(135deg, hsl(270 40% 55% / 0.15) 0%, hsl(270 35% 40% / 0.06) 100%);
+    border-color: hsl(270 40% 55% / 0.45);
+    color: hsl(270 40% 78%);
+    backdrop-filter: blur(8px);
+  }
+  .cal-block-work {
+    background: linear-gradient(135deg, hsl(30 8% 25% / 0.5) 0%, hsl(30 8% 18% / 0.3) 100%);
+    border-color: hsl(30 8% 35% / 0.5);
+    color: hsl(40 10% 65%);
+    backdrop-filter: blur(8px);
+  }
+  .cal-block-reading {
+    background: linear-gradient(135deg, hsl(210 50% 50% / 0.15) 0%, hsl(210 45% 40% / 0.06) 100%);
+    border-color: hsl(210 50% 50% / 0.45);
+    color: hsl(210 50% 78%);
+    backdrop-filter: blur(8px);
+  }
+  .cal-block-wake {
+    background: linear-gradient(135deg, hsl(45 80% 55% / 0.12) 0%, hsl(45 70% 45% / 0.05) 100%);
+    border-color: hsl(45 80% 55% / 0.4);
+    color: hsl(45 70% 75%);
+    backdrop-filter: blur(8px);
+  }
+  .cal-block-sleep {
+    background: linear-gradient(135deg, hsl(230 35% 30% / 0.25) 0%, hsl(230 30% 20% / 0.12) 100%);
+    border-color: hsl(230 35% 40% / 0.35);
+    color: hsl(230 30% 65%);
+    backdrop-filter: blur(8px);
+  }
+  .cal-block-commute {
+    background: linear-gradient(135deg, hsl(30 30% 45% / 0.14) 0%, hsl(30 25% 35% / 0.06) 100%);
+    border-color: hsl(30 30% 45% / 0.4);
+    color: hsl(30 25% 68%);
+    backdrop-filter: blur(8px);
+  }
+  .cal-block-custom {
+    background: linear-gradient(135deg, hsl(180 40% 45% / 0.15) 0%, hsl(180 35% 35% / 0.06) 100%);
+    border-color: hsl(180 40% 45% / 0.45);
+    color: hsl(180 35% 75%);
+    backdrop-filter: blur(8px);
+  }
+  .cal-block-strategy {
+    background: linear-gradient(135deg, hsl(45 80% 55% / 0.15) 0%, hsl(40 70% 45% / 0.06) 100%);
+    border-color: hsl(45 80% 55% / 0.5);
+    color: hsl(45 70% 78%);
+    backdrop-filter: blur(8px);
+  }
+  .cal-block-default {
+    background: linear-gradient(135deg, hsl(30 10% 25% / 0.3) 0%, hsl(30 10% 18% / 0.15) 100%);
+    border-color: hsl(30 10% 35% / 0.4);
+    color: hsl(40 10% 70%);
+    backdrop-filter: blur(8px);
+  }
 }
 
 @layer utilities {
