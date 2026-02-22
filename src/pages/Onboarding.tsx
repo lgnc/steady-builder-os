@@ -102,7 +102,7 @@ const defaultData: OnboardingData = {
   commuteMinutes: 30,
   flexibleWork: false,
   preferredTrainingWindow: "morning",
-  restDays: ["sunday"],
+  restDays: [],
   preferredTrainingDays: [],
   fifoShiftLength: null,
   fifoShiftType: null,
