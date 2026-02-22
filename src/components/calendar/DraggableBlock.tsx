@@ -45,7 +45,7 @@ export function DraggableBlock({
   const topDelta = resizePreview?.topDelta ?? 0;
   const heightDelta = resizePreview?.heightDelta ?? 0;
   const finalTop = style.top + dragOffset + topDelta;
-  const finalHeight = Math.max(style.height + heightDelta, 8);
+  const finalHeight = Math.max(style.height + heightDelta, 3);
   const showText = finalHeight >= 18;
 
   return (
@@ -63,7 +63,7 @@ export function DraggableBlock({
       style={{
         top: finalTop,
         height: finalHeight,
-        minHeight: 8,
+        minHeight: 3,
         transition: isDragging || isResizing ? "none" : "top 0.2s ease-out, height 0.2s ease-out",
       }}
       onTouchStart={onTouchStart}

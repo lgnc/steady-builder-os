@@ -277,7 +277,7 @@ export default function CalendarPage() {
     if (startHour < startHourOfGrid || startHour >= END_HOUR) return null;
 
     const top = (startHour - startHourOfGrid) * HOUR_HEIGHT;
-    const height = Math.max(duration * HOUR_HEIGHT, HOUR_HEIGHT / 4);
+    const height = duration * HOUR_HEIGHT;
 
     return { top, height };
   };
