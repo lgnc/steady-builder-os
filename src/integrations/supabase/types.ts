@@ -934,6 +934,9 @@ export type Database = {
           active_mode: string
           created_at: string
           id: string
+          shift_end: string | null
+          shift_start: string | null
+          shift_type: string
           user_id: string
           week_start_date: string
         }
@@ -941,6 +944,9 @@ export type Database = {
           active_mode?: string
           created_at?: string
           id?: string
+          shift_end?: string | null
+          shift_start?: string | null
+          shift_type?: string
           user_id: string
           week_start_date: string
         }
@@ -948,6 +954,9 @@ export type Database = {
           active_mode?: string
           created_at?: string
           id?: string
+          shift_end?: string | null
+          shift_start?: string | null
+          shift_type?: string
           user_id?: string
           week_start_date?: string
         }
