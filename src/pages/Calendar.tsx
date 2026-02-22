@@ -270,15 +270,29 @@ export default function CalendarPage() {
 
     let duration = endHour - startHour;
     if (duration <= 0) {
-      duration = 24 - startHour;
+      // Crosses midnight — clip to end of day (show evening portion only)
+      duration = END_HOUR - startHour;
     }
 
     if (startHour < startHourOfGrid || startHour >= END_HOUR) return null;
 
     const top = (startHour - startHourOfGrid) * HOUR_HEIGHT;
-    const height = duration * HOUR_HEIGHT;
+    const height = Math.max(duration * HOUR_HEIGHT, HOUR_HEIGHT / 4);
 
     return { top, height };
+  };
+
+  // For sleep blocks that cross midnight, generate a morning portion (00:00 → wake)
+  const getSleepMorningStyle = (block: ScheduleBlock) => {
+    if (block.block_type !== "sleep") return null;
+    const startHour = parseTime(block.start_time);
+    const endHour = parseTime(block.end_time);
+    if (endHour >= startHour) return null; // doesn't cross midnight
+    
+    const morningDuration = endHour - startHourOfGrid;
+    if (morningDuration <= 0) return null;
+
+    return { top: 0, height: morningDuration * HOUR_HEIGHT };
   };
 
   const formatTimeShort = (time: string) => {
@@ -397,11 +411,33 @@ export default function CalendarPage() {
                     />
                   ))}
 
+                  {/* Morning sleep portion from previous day's sleep block */}
+                  {(() => {
+                    const prevDayIndex = (day.getDay() + 6) % 7; // previous day
+                    const prevDaySleep = effectiveBlocks.find(
+                      (b) => b.day_of_week === prevDayIndex && b.block_type === "sleep"
+                    );
+                    if (!prevDaySleep) return null;
+                    const morningStyle = getSleepMorningStyle(prevDaySleep);
+                    if (!morningStyle) return null;
+                    return (
+                      <div
+                        className={cn(
+                          "absolute left-0.5 right-0.5 rounded-sm border-l-2 px-1 overflow-hidden pointer-events-none opacity-60",
+                          getBlockColor("sleep")
+                        )}
+                        style={{ top: morningStyle.top, height: morningStyle.height, zIndex: 1 }}
+                      >
+                        <span className="text-[8px] font-medium truncate block mt-0.5">Sleep</span>
+                      </div>
+                    );
+                  })()}
+
                   {/* Schedule blocks */}
                   {dayBlocks.map((block) => {
                     const style = getBlockStyle(block);
                     if (!style) return null;
-                    if (block.block_type === "sleep") return null;
+                    
 
                       const isWorkBlock = block.block_type === "work";
                       const workoutStatus = block.block_type === "training" && block.training_day_id
