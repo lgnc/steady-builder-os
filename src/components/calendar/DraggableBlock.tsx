@@ -57,7 +57,7 @@ export function DraggableBlock({
           ? "z-50 shadow-2xl ring-1 ring-white/20 scale-[1.03] brightness-110"
           : isResizing
           ? "z-50 shadow-2xl ring-1 ring-white/20"
-          : "hover:z-10 hover:brightness-110 animate-scale-in"
+          : "hover:z-10 hover:brightness-105 animate-scale-in"
       )}
       style={{
         top: finalTop,
