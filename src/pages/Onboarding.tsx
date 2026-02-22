@@ -957,7 +957,7 @@ function generateOnSiteBlocks(userId: string, data: OnboardingData, allDays: num
         blocks.push({ user_id: userId, block_type: 'training', title: 'On-Site Training', start_time: trainingStart, end_time: trainingEnd, day_of_week: day, is_locked: false, schedule_mode: 'on_site' });
       }
 
-      blocks.push({ user_id: userId, block_type: 'work', title: 'Night Shift', start_time: shiftStart, end_time: '23:59', day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
+      blocks.push({ user_id: userId, block_type: 'work', title: 'Night Shift', start_time: shiftStart, end_time: shiftEnd, day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
     }
   });
 
