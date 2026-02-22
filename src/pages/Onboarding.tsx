@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, ArrowLeft, Check, AlertCircle } from "lucide-react";
@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { useToast } from "@/hooks/use-toast";
+import { BuildingPlanScreen } from "@/components/onboarding/BuildingPlanScreen";
 
 // Step components
 import { SleepStep } from "@/components/onboarding/SleepStep";
@@ -134,6 +135,8 @@ export default function OnboardingPage() {
   const [eightWeekGoals, setEightWeekGoals] = useState<EightWeekGoal[]>([]);
   const [loading, setLoading] = useState(false);
   const [showSleepWarning, setShowSleepWarning] = useState(false);
+  const [showBuildingScreen, setShowBuildingScreen] = useState(false);
+  const backendDoneRef = useRef(false);
   
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -285,27 +288,47 @@ export default function OnboardingPage() {
 
       if (error) throw error;
 
-      await generateSchedule();
-      await seedDefaultChecklistItems();
-      await seedHabits();
-      await saveEightWeekGoals();
+      // Show building screen immediately
+      setShowBuildingScreen(true);
+      setLoading(false);
 
-      toast({
-        title: "Structure installed",
-        description: "Your operating system is ready.",
-      });
-
-      navigate("/dashboard");
+      // Run backend work in parallel
+      Promise.all([
+        generateSchedule(),
+        seedDefaultChecklistItems(),
+        seedHabits(),
+        saveEightWeekGoals(),
+      ])
+        .then(() => {
+          backendDoneRef.current = true;
+        })
+        .catch(() => {
+          backendDoneRef.current = true; // still allow navigation
+        });
     } catch (error) {
       toast({
         title: "Error",
         description: "Failed to save your data. Please try again.",
         variant: "destructive",
       });
-    } finally {
       setLoading(false);
     }
   };
+
+  const handleBuildingComplete = useCallback(() => {
+    const checkAndNavigate = () => {
+      if (backendDoneRef.current) {
+        toast({
+          title: "Structure installed",
+          description: "Your operating system is ready.",
+        });
+        navigate("/dashboard");
+      } else {
+        setTimeout(checkAndNavigate, 500);
+      }
+    };
+    checkAndNavigate();
+  }, [navigate, toast]);
 
   const saveEightWeekGoals = async () => {
     if (!user || eightWeekGoals.length === 0) return;
@@ -712,6 +735,10 @@ export default function OnboardingPage() {
         <div className="animate-pulse text-muted-foreground">Loading...</div>
       </div>
     );
+  }
+
+  if (showBuildingScreen) {
+    return <BuildingPlanScreen data={data} onComplete={handleBuildingComplete} />;
   }
 
   const stepTitles = [
