@@ -1,86 +1,58 @@
 
-# Home / On-Site Mode Toggle for FIFO Workers
 
-## The Problem
-FIFO (fly-in fly-out) workers alternate between home periods and on-site periods with completely different schedules -- different shift lengths, sleep patterns, training options, and routines. Currently, the app only generates a single "home" schedule and has no way to switch to an on-site structure.
+# Replace Streak Counters with Weekly Completion Block
 
-## Solution Overview
-We'll build a **dual-schedule system** where FIFO users have two complete sets of schedule blocks stored in the database, and a toggle on the calendar to switch between them. The app will remember which mode is active per week.
+## What Changes
 
----
+The two streak counter cards (Training streak and Morning streak) at the top of the dashboard will be replaced with a single **Weekly Completion** block that shows three progress bars: Habits, Training, and Nutrition -- each targeting 85%+.
 
-## What Needs to Be Built
+## Layout
 
-### 1. Database Changes
+The current top section has:
+- Daily completion % (left, larger)
+- Training streak (middle)
+- Morning streak (right)
 
-**New column on `schedule_blocks`:**
-- `schedule_mode` (text, default `'home'`) -- values: `'home'` or `'on_site'`. This tags every block so we can filter by mode.
+The new layout will be:
+- Daily completion % (unchanged, stays at top)
+- **Weekly Completion card** (full width, below daily completion) containing three mini progress bars for Habits, Training, and Nutrition, each with a percentage and color-coded against the 85% target
 
-**New table: `user_schedule_mode`**
-- `id` (uuid, primary key)
-- `user_id` (uuid, not null)
-- `week_start_date` (date, not null) -- which week this applies to
-- `active_mode` (text, default `'home'`) -- `'home'` or `'on_site'`
-- `created_at` (timestamptz, default now())
-- Unique constraint on `(user_id, week_start_date)`
-- RLS policies: users can only read/insert/update/delete their own rows
+## Weekly Completion Card Design
 
-### 2. On-Site Schedule Generation (Onboarding)
+A single `card-stat` with the heading "This Week" showing:
 
-During onboarding's `generateSchedule()` function, after building the home schedule (as it does now), generate a **second set of blocks** tagged with `schedule_mode: 'on_site'` using the FIFO-specific data:
-
-- **Shift block**: 10 or 12 hours based on `fifoShiftLength`, placed according to `fifoShiftType` (day shift ~6am-6pm, night shift ~6pm-6am)
-- **Sleep**: Adjusted for shift type -- day sleepers after night shift, normal sleep for day shift
-- **Morning/evening routines**: Compressed versions (shorter, since time is limited)
-- **Training**: Minimal or bodyweight-only session if time allows (many FIFO sites have a gym)
-- **No commute blocks**: Workers are on-site, no driving
-
-This only runs for users where `workType === 'fifo'`.
-
-### 3. Calendar Toggle UI
-
-Add a toggle component at the top of the Calendar page (visible only for FIFO users):
-- Two-state toggle: **Home** | **On-Site**
-- Persists the selection per week to the `user_schedule_mode` table
-- When toggled, the calendar filters `schedule_blocks` by the active `schedule_mode`
-
-### 4. Code Changes Summary
-
-| File | Change |
-|------|--------|
-| **Migration SQL** | Add `schedule_mode` column to `schedule_blocks`; create `user_schedule_mode` table with RLS |
-| **`src/pages/Onboarding.tsx`** | Tag all current blocks with `schedule_mode: 'home'`; add on-site block generation logic for FIFO users |
-| **`src/pages/Calendar.tsx`** | Fetch active mode for current week; filter blocks by mode; add toggle UI for FIFO users |
-| **`src/components/onboarding/FifoSiteStep.tsx`** | Optionally add fields for on-site gym availability and wake time preferences |
-
-### 5. Technical Details
-
-**Calendar block filtering:**
 ```text
-Current flow:
-  fetch schedule_blocks -> display all
-
-New flow:
-  fetch user's work_type from onboarding_data
-  if FIFO:
-    fetch active_mode from user_schedule_mode for current week (default: 'home')
-    fetch schedule_blocks WHERE schedule_mode = active_mode
-  else:
-    fetch schedule_blocks (all are 'home' by default, backward compatible)
+This Week                          Target: 85%
+Habits      ████████░░  72%
+Training    ██████████  100% (3/3)
+Nutrition   ███████░░░  68%
 ```
 
-**On-site schedule builder logic (pseudocode):**
-```text
-For each day (Sun-Sat):
-  if day shift:
-    wake 05:00, shift 06:00-18:00, short routine, sleep 21:00
-    training squeezed into 18:30-19:30 if gym available
-  if night shift:
-    wake 16:00, shift 18:00-06:00, sleep 07:00-15:00
-    training in afternoon before shift if gym available
-```
+- Bars turn green (primary) at 85%+, amber at 50-84%, red below 50%
+- Each row shows the category icon, label, progress bar, and percentage
+- Training also shows session count (e.g., "3/3")
 
-**Backward compatibility:**
-- Existing blocks get `schedule_mode = 'home'` by default (via column default)
-- Non-FIFO users never see the toggle
-- No changes to how standard/shift workers experience the app
+## Data Fetching
+
+A new `useEffect` will compute weekly totals using the same week boundaries (Sunday start) already used elsewhere:
+
+1. **Training %**: Count completed sessions vs scheduled sessions for the week from `user_training_schedule`
+2. **Habits %**: Count habit completions vs (active habits x days elapsed) from `habit_completions` and `habits`
+3. **Nutrition %**: Count completed meals vs expected meals from `meal_completions` and `meal_plans`
+
+This reuses the same queries already proven in `WeeklyPerformanceCard.tsx` on the Profile page.
+
+## Technical Changes
+
+### `src/pages/Dashboard.tsx`
+
+1. Add new state: `weeklyCompletion` with `{ habitsPercent, trainingCompleted, trainingTotal, nutritionPercent }`
+2. Add a `useEffect` that fetches weekly data (habits, training, nutrition) for the current week
+3. Remove the two streak counter `div`s (lines 444-459)
+4. Replace with a full-width Weekly Completion card below the daily completion bar
+5. Remove `streaks` state and its fetch since it's no longer needed
+6. Remove `Flame` icon import (no longer used)
+
+### No database changes needed
+All data is already available in existing tables.
+
