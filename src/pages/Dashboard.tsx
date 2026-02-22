@@ -28,6 +28,7 @@ import { ReadingLogSheet } from "@/components/dashboard/ReadingLogSheet";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { toast } from "sonner";
 import { useDay28Review } from "@/hooks/useDay28Review";
+import BonusMaterial from "@/components/dashboard/BonusMaterial";
 import { Day28ReviewModal } from "@/components/profile/Day28ReviewModal";
 import { EightWeekGoalsCard } from "@/components/dashboard/EightWeekGoalsCard";
 
@@ -610,9 +611,11 @@ export default function DashboardPage() {
               })
             )}
           </div>
-        </motion.section>
+      </motion.section>
 
-      </div>
+        <BonusMaterial />
+
+    </div>
 
       <CoachChat />
 
