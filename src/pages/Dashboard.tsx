@@ -10,8 +10,9 @@ import {
   BookOpen,
   ChevronRight,
   ChevronLeft,
-  Flame,
+  CheckCircle,
   CheckCircle2,
+  Utensils,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { getTodayQuote } from "@/data/dailyQuotes";
@@ -43,9 +44,11 @@ interface ScheduleBlock {
   training_day_id: string | null;
 }
 
-interface Streak {
-  streak_type: string;
-  current_streak: number;
+interface WeeklyCompletion {
+  habitsPercent: number;
+  trainingCompleted: number;
+  trainingTotal: number;
+  nutritionPercent: number;
 }
 
 const ANCHOR_TYPES = ["morning_routine", "training", "reading", "evening_routine"];
@@ -84,7 +87,7 @@ function isFutureDate(date: Date): boolean {
 export default function DashboardPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [todayBlocks, setTodayBlocks] = useState<ScheduleBlock[]>([]);
-  const [streaks, setStreaks] = useState<Streak[]>([]);
+  const [weeklyCompletion, setWeeklyCompletion] = useState<WeeklyCompletion | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [greeting, setGreeting] = useState("");
   const [routineSheetOpen, setRoutineSheetOpen] = useState(false);
@@ -144,22 +147,14 @@ export default function DashboardPage() {
 
       const dayOfWeek = selectedDate.getDay();
 
-      const [blocksRes, streaksRes] = await Promise.all([
-        supabase
-          .from("schedule_blocks")
-          .select("*")
-          .eq("user_id", user.id)
-          .eq("day_of_week", dayOfWeek)
-          .order("start_time"),
-        supabase
-          .from("streaks")
-          .select("streak_type, current_streak")
-          .eq("user_id", user.id)
-          .in("streak_type", ["training", "morning_routine"]),
-      ]);
+      const { data: blocksData } = await supabase
+        .from("schedule_blocks")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("day_of_week", dayOfWeek)
+        .order("start_time");
 
-      if (blocksRes.data) setTodayBlocks(blocksRes.data);
-      if (streaksRes.data) setStreaks(streaksRes.data);
+      if (blocksData) setTodayBlocks(blocksData);
 
       // Fetch completion data for anchors
       const completions: Record<string, boolean> = {};
@@ -352,9 +347,56 @@ export default function DashboardPage() {
     return true;
   });
 
-  const trainingStreak = streaks.find((s) => s.streak_type === "training")?.current_streak ?? 0;
-  const morningStreak = streaks.find((s) => s.streak_type === "morning_routine")?.current_streak ?? 0;
   const completionPct = getDailyCompletion();
+
+  // Fetch weekly completion data
+  useEffect(() => {
+    if (!user) return;
+    const fetchWeekly = async () => {
+      const now = new Date();
+      const weekStart = startOfWeek(now, { weekStartsOn: 0 });
+      const today = now < startOfWeek(now, { weekStartsOn: 0 }) ? now : now;
+      const daysElapsed = Math.min(7, Math.floor((now.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+      const startStr = format(weekStart, "yyyy-MM-dd");
+      const endStr = format(now, "yyyy-MM-dd");
+
+      const daysOfWeek: number[] = [];
+      for (let i = 0; i < daysElapsed; i++) {
+        daysOfWeek.push((weekStart.getDay() + i) % 7);
+      }
+
+      const [trainingBlocks, trainingDone, habitsRes, completionsRes, mealPlansRes, mealCompletionsRes] = await Promise.all([
+        supabase.from("schedule_blocks").select("day_of_week").eq("user_id", user.id).eq("block_type", "training").in("day_of_week", daysOfWeek),
+        supabase.from("user_training_schedule").select("day_of_week, completed").eq("user_id", user.id).eq("completed", true).in("day_of_week", daysOfWeek),
+        supabase.from("habits").select("id").eq("user_id", user.id).eq("is_active", true),
+        supabase.from("habit_completions").select("completed_date").eq("user_id", user.id).gte("completed_date", startStr).lte("completed_date", endStr),
+        supabase.from("meal_plans").select("plan_data").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1),
+        supabase.from("meal_completions").select("completed").eq("user_id", user.id).eq("completed", true).gte("meal_date", startStr).lte("meal_date", endStr),
+      ]);
+
+      const trainingTotal = new Set((trainingBlocks.data || []).map(b => b.day_of_week)).size;
+      const trainingCompleted = new Set((trainingDone.data || []).map(s => s.day_of_week)).size;
+
+      const habitCount = habitsRes.data?.length || 0;
+      const totalPossible = habitCount * daysElapsed;
+      const totalCompleted = completionsRes.data?.length || 0;
+      const habitsPercent = totalPossible > 0 ? Math.round((totalCompleted / totalPossible) * 100) : 0;
+
+      let nutritionPercent = 0;
+      if (mealPlansRes.data?.length) {
+        const planData = mealPlansRes.data[0].plan_data as any;
+        const days = planData?.days || [];
+        let totalMeals = 0;
+        for (const day of days) totalMeals += (day.meals?.length || 0);
+        const mealsPerDay = days.length > 0 ? totalMeals / days.length : 0;
+        const expectedMeals = Math.round(mealsPerDay * daysElapsed);
+        nutritionPercent = expectedMeals > 0 ? Math.round(((mealCompletionsRes.data?.length || 0) / expectedMeals) * 100) : 0;
+      }
+
+      setWeeklyCompletion({ habitsPercent, trainingCompleted, trainingTotal, nutritionPercent });
+    };
+    fetchWeekly();
+  }, [user, selectedDate]);
 
   // Quick action button logic
   const isEvening = currentTime.getHours() >= 17;
@@ -430,33 +472,75 @@ export default function DashboardPage() {
           )}
         </motion.header>
 
-        {/* Daily Completion + Streaks */}
+        {/* Daily Completion */}
         <motion.section
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="flex gap-3 items-stretch"
+          className="space-y-3"
         >
-          <div className="flex-[1.5] card-stat flex flex-col justify-center gap-1.5 p-3">
+          <div className="card-stat flex flex-col justify-center gap-1.5 p-3">
             <span className="text-xs text-muted-foreground">{viewingToday ? "Today" : format(selectedDate, "EEE")}: {completionPct}%</span>
             <ProgressBar value={completionPct} />
           </div>
 
-          <div className="flex-1 card-stat flex items-center gap-2 p-3">
-            <Flame className={cn("h-4 w-4", trainingStreak > 0 ? "text-primary" : "text-muted-foreground")} />
-            <div>
-              <span className="text-lg font-semibold">{trainingStreak}</span>
-              <span className="text-xs text-muted-foreground ml-1">Training</span>
-            </div>
-          </div>
+          {/* Weekly Completion */}
+          {weeklyCompletion && (
+            <div className="card-stat p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">This Week</span>
+                <span className="text-xs text-muted-foreground">Target: 85%</span>
+              </div>
 
-          <div className="flex-1 card-stat flex items-center gap-2 p-3">
-            <Flame className={cn("h-4 w-4", morningStreak > 0 ? "text-primary" : "text-muted-foreground")} />
-            <div>
-              <span className="text-lg font-semibold">{morningStreak}</span>
-              <span className="text-xs text-muted-foreground ml-1">Morning</span>
+              {/* Habits */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className={cn("h-3.5 w-3.5", weeklyCompletion.habitsPercent >= 85 ? "text-primary" : weeklyCompletion.habitsPercent >= 50 ? "text-amber-500" : "text-destructive")} />
+                    <span className="text-xs">Habits</span>
+                  </div>
+                  <span className={cn("text-xs font-semibold", weeklyCompletion.habitsPercent >= 85 ? "text-primary" : weeklyCompletion.habitsPercent >= 50 ? "text-amber-500" : "text-destructive")}>
+                    {weeklyCompletion.habitsPercent}%
+                  </span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
+                  <div className={cn("h-full rounded-full transition-all duration-500", weeklyCompletion.habitsPercent >= 85 ? "bg-primary" : weeklyCompletion.habitsPercent >= 50 ? "bg-amber-500" : "bg-destructive")} style={{ width: `${Math.min(100, weeklyCompletion.habitsPercent)}%` }} />
+                </div>
+              </div>
+
+              {/* Training */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Dumbbell className={cn("h-3.5 w-3.5", weeklyCompletion.trainingTotal > 0 && weeklyCompletion.trainingCompleted >= weeklyCompletion.trainingTotal * 0.85 ? "text-primary" : weeklyCompletion.trainingCompleted > 0 ? "text-amber-500" : "text-destructive")} />
+                    <span className="text-xs">Training</span>
+                  </div>
+                  <span className={cn("text-xs font-semibold", weeklyCompletion.trainingTotal > 0 && weeklyCompletion.trainingCompleted >= weeklyCompletion.trainingTotal * 0.85 ? "text-primary" : weeklyCompletion.trainingCompleted > 0 ? "text-amber-500" : "text-destructive")}>
+                    {weeklyCompletion.trainingTotal > 0 ? Math.round((weeklyCompletion.trainingCompleted / weeklyCompletion.trainingTotal) * 100) : 0}% ({weeklyCompletion.trainingCompleted}/{weeklyCompletion.trainingTotal})
+                  </span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
+                  <div className={cn("h-full rounded-full transition-all duration-500", weeklyCompletion.trainingTotal > 0 && weeklyCompletion.trainingCompleted >= weeklyCompletion.trainingTotal * 0.85 ? "bg-primary" : weeklyCompletion.trainingCompleted > 0 ? "bg-amber-500" : "bg-destructive")} style={{ width: `${weeklyCompletion.trainingTotal > 0 ? Math.min(100, (weeklyCompletion.trainingCompleted / weeklyCompletion.trainingTotal) * 100) : 0}%` }} />
+                </div>
+              </div>
+
+              {/* Nutrition */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Utensils className={cn("h-3.5 w-3.5", weeklyCompletion.nutritionPercent >= 85 ? "text-primary" : weeklyCompletion.nutritionPercent >= 50 ? "text-amber-500" : "text-destructive")} />
+                    <span className="text-xs">Nutrition</span>
+                  </div>
+                  <span className={cn("text-xs font-semibold", weeklyCompletion.nutritionPercent >= 85 ? "text-primary" : weeklyCompletion.nutritionPercent >= 50 ? "text-amber-500" : "text-destructive")}>
+                    {weeklyCompletion.nutritionPercent}%
+                  </span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
+                  <div className={cn("h-full rounded-full transition-all duration-500", weeklyCompletion.nutritionPercent >= 85 ? "bg-primary" : weeklyCompletion.nutritionPercent >= 50 ? "bg-amber-500" : "bg-destructive")} style={{ width: `${Math.min(100, weeklyCompletion.nutritionPercent)}%` }} />
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </motion.section>
 
         {/* 8-Week Goals */}
