@@ -228,34 +228,34 @@ export default function CalendarPage() {
     if (type === "training") {
       switch (status) {
         case "completed":
-          return "bg-primary border-primary text-primary-foreground";
+          return "cal-block-training-done";
         case "in_progress":
-          return "bg-primary/60 border-primary ring-2 ring-primary/50 text-primary-foreground";
-        default: // planned or null
-          return "bg-primary/30 border-primary/50 text-primary-foreground/70";
+          return "cal-block-training-active";
+        default:
+          return "cal-block-training";
       }
     }
     switch (type) {
       case "morning_routine":
-        return "bg-emerald-500/20 border-emerald-500/50 text-emerald-300";
+        return "cal-block-morning";
       case "evening_routine":
-        return "bg-violet-500/20 border-violet-500/50 text-violet-300";
+        return "cal-block-evening";
       case "work":
-        return "bg-muted/80 border-border text-muted-foreground";
+        return "cal-block-work";
       case "reading":
-        return "bg-sky-500/20 border-sky-500/50 text-sky-300";
+        return "cal-block-reading";
       case "wake":
-        return "bg-amber-500/20 border-amber-500/50 text-amber-300";
+        return "cal-block-wake";
       case "sleep":
-        return "bg-indigo-500/10 border-indigo-500/30 text-indigo-300";
+        return "cal-block-sleep";
       case "commute":
-        return "bg-orange-500/15 border-orange-500/40 text-orange-300";
+        return "cal-block-commute";
       case "custom":
-        return "bg-teal-500/20 border-teal-500/50 text-teal-300";
+        return "cal-block-custom";
       case "strategy":
-        return "bg-amber-500/20 border-amber-500/50 text-amber-300";
+        return "cal-block-strategy";
       default:
-        return "bg-accent/50 border-accent text-accent-foreground";
+        return "cal-block-default";
     }
   };
 
@@ -423,7 +423,7 @@ export default function CalendarPage() {
                     return (
                       <div
                         className={cn(
-                          "absolute left-0.5 right-0.5 rounded-sm border-l-2 px-1 overflow-hidden pointer-events-none opacity-60",
+                          "absolute left-0.5 right-0.5 rounded-md border-l-2 px-1 overflow-hidden pointer-events-none opacity-70",
                           getBlockColor("sleep")
                         )}
                         style={{ top: morningStyle.top, height: morningStyle.height, zIndex: 1 }}
