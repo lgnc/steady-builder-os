@@ -207,85 +207,72 @@
     @apply bg-info/10 border-l-info text-info-foreground;
   }
 
-  /* Calendar Block Glass Styles */
+  /* Calendar Block Styles — Monochromatic Warmth */
   .cal-block-training {
-    background: linear-gradient(135deg, hsl(194 90% 54% / 0.18) 0%, hsl(194 90% 40% / 0.08) 100%);
-    border-color: hsl(194 90% 54% / 0.5);
-    color: hsl(194 80% 75%);
-    backdrop-filter: blur(8px);
+    background: hsl(25 12% 19%);
+    border-color: hsl(25 12% 26%);
+    color: hsl(40 20% 90%);
   }
   .cal-block-training-active {
-    background: linear-gradient(135deg, hsl(194 90% 54% / 0.35) 0%, hsl(194 90% 40% / 0.15) 100%);
-    border-color: hsl(194 90% 54%);
-    color: hsl(194 80% 90%);
-    backdrop-filter: blur(8px);
-    box-shadow: 0 0 12px hsl(194 90% 54% / 0.2);
+    background: hsl(194 30% 18%);
+    border-color: hsl(194 50% 35%);
+    color: hsl(194 40% 88%);
+    box-shadow: 0 0 8px hsl(194 60% 40% / 0.15);
   }
   .cal-block-training-done {
-    background: linear-gradient(135deg, hsl(194 90% 54% / 0.45) 0%, hsl(194 80% 45% / 0.2) 100%);
-    border-color: hsl(194 90% 54%);
-    color: hsl(194 80% 95%);
-    backdrop-filter: blur(8px);
+    background: hsl(194 35% 16%);
+    border-color: hsl(194 70% 45%);
+    color: hsl(194 60% 92%);
   }
   .cal-block-morning {
-    background: linear-gradient(135deg, hsl(45 80% 55% / 0.15) 0%, hsl(35 70% 45% / 0.06) 100%);
-    border-color: hsl(45 80% 55% / 0.5);
-    color: hsl(45 70% 75%);
-    backdrop-filter: blur(8px);
+    background: hsl(28 10% 15%);
+    border-color: hsl(28 10% 22%);
+    color: hsl(40 18% 88%);
   }
   .cal-block-evening {
-    background: linear-gradient(135deg, hsl(270 40% 55% / 0.15) 0%, hsl(270 35% 40% / 0.06) 100%);
-    border-color: hsl(270 40% 55% / 0.45);
-    color: hsl(270 40% 78%);
-    backdrop-filter: blur(8px);
+    background: hsl(25 10% 14%);
+    border-color: hsl(25 10% 21%);
+    color: hsl(40 18% 88%);
   }
   .cal-block-work {
-    background: linear-gradient(135deg, hsl(30 8% 25% / 0.5) 0%, hsl(30 8% 18% / 0.3) 100%);
-    border-color: hsl(30 8% 35% / 0.5);
-    color: hsl(40 10% 65%);
-    backdrop-filter: blur(8px);
+    background: hsl(26 9% 11%);
+    border-color: hsl(26 9% 17%);
+    color: hsl(40 14% 82%);
   }
   .cal-block-reading {
-    background: linear-gradient(135deg, hsl(210 50% 50% / 0.15) 0%, hsl(210 45% 40% / 0.06) 100%);
-    border-color: hsl(210 50% 50% / 0.45);
-    color: hsl(210 50% 78%);
-    backdrop-filter: blur(8px);
+    background: hsl(24 10% 13%);
+    border-color: hsl(24 10% 19%);
+    color: hsl(40 16% 85%);
   }
   .cal-block-wake {
-    background: linear-gradient(135deg, hsl(45 80% 55% / 0.12) 0%, hsl(45 70% 45% / 0.05) 100%);
-    border-color: hsl(45 80% 55% / 0.4);
-    color: hsl(45 70% 75%);
-    backdrop-filter: blur(8px);
+    background: hsl(28 10% 15%);
+    border-color: hsl(28 10% 22%);
+    color: hsl(40 18% 88%);
   }
   .cal-block-sleep {
-    background: linear-gradient(135deg, hsl(230 35% 30% / 0.25) 0%, hsl(230 30% 20% / 0.12) 100%);
-    border-color: hsl(230 35% 40% / 0.35);
-    color: hsl(230 30% 65%);
-    backdrop-filter: blur(8px);
+    background: hsl(24 10% 8%);
+    border-color: hsl(24 10% 13%);
+    color: hsl(40 12% 75%);
   }
   .cal-block-commute {
-    background: linear-gradient(135deg, hsl(30 30% 45% / 0.14) 0%, hsl(30 25% 35% / 0.06) 100%);
-    border-color: hsl(30 30% 45% / 0.4);
-    color: hsl(30 25% 68%);
-    backdrop-filter: blur(8px);
+    background: hsl(26 9% 12%);
+    border-color: hsl(26 9% 18%);
+    color: hsl(40 14% 82%);
   }
   .cal-block-custom {
-    background: linear-gradient(135deg, hsl(180 40% 45% / 0.15) 0%, hsl(180 35% 35% / 0.06) 100%);
-    border-color: hsl(180 40% 45% / 0.45);
-    color: hsl(180 35% 75%);
-    backdrop-filter: blur(8px);
+    background: hsl(25 9% 12%);
+    border-color: hsl(25 9% 18%);
+    color: hsl(40 14% 83%);
   }
   .cal-block-strategy {
-    background: linear-gradient(135deg, hsl(45 80% 55% / 0.15) 0%, hsl(40 70% 45% / 0.06) 100%);
-    border-color: hsl(45 80% 55% / 0.5);
-    color: hsl(45 70% 78%);
-    backdrop-filter: blur(8px);
+    background: hsl(27 10% 13%);
+    border-color: hsl(27 10% 20%);
+    color: hsl(40 16% 86%);
   }
   .cal-block-default {
-    background: linear-gradient(135deg, hsl(30 10% 25% / 0.3) 0%, hsl(30 10% 18% / 0.15) 100%);
-    border-color: hsl(30 10% 35% / 0.4);
-    color: hsl(40 10% 70%);
-    backdrop-filter: blur(8px);
+    background: hsl(25 9% 11%);
+    border-color: hsl(25 9% 17%);
+    color: hsl(40 14% 80%);
   }
 }
 
