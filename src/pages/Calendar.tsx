@@ -117,7 +117,8 @@ export default function CalendarPage() {
         .single();
       if (data) {
         setActiveMode((data as any)?.active_mode || 'home');
-        setWeekHasShiftConfig(!!(data as any)?.shift_type && (data as any)?.shift_start);
+        const shiftStart = (data as any)?.shift_start;
+        setWeekHasShiftConfig(!!shiftStart && shiftStart.trim() !== '');
       } else {
         setActiveMode('home');
         setWeekHasShiftConfig(false);
@@ -199,7 +200,7 @@ export default function CalendarPage() {
       .eq("user_id", user.id)
       .order("start_time");
     if (data) {
-      setBlocks(data.filter((b: any) => (b as any).schedule_mode === 'on_site' || !(b as any).schedule_mode));
+      setBlocks(data.filter((b: any) => (b as any).schedule_mode === 'on_site'));
     }
   }, [user, weekStart, fifoShiftLength]);
 
@@ -216,7 +217,7 @@ export default function CalendarPage() {
       if (data) {
         // Filter by schedule mode client-side for FIFO users
         if (isFifoUser) {
-          setBlocks(data.filter((b: any) => (b as any).schedule_mode === activeMode || !(b as any).schedule_mode));
+          setBlocks(data.filter((b: any) => (b as any).schedule_mode === activeMode));
         } else {
           setBlocks(data);
         }

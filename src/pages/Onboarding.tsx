@@ -729,13 +729,9 @@ export default function OnboardingPage() {
     const homeBlocks = blocks.map((b: any) => ({ ...b, schedule_mode: 'home' }));
     await supabase.from("schedule_blocks").insert(homeBlocks);
 
-    // Generate on-site schedule for FIFO users
-    if (data.workType === 'fifo' && data.fifoShiftLength && data.fifoShiftType) {
-      const onSiteBlocks = generateOnSiteBlocks(user.id, data, allDays);
-      if (onSiteBlocks.length > 0) {
-        await supabase.from("schedule_blocks").insert(onSiteBlocks);
-      }
-    }
+    // On-site blocks are NOT generated during onboarding.
+    // They are created when the user first toggles to "On-Site" on the calendar
+    // and configures their shift via the ShiftConfigSheet.
 
     if (trainingDaysData) {
       const scheduleEntries = Object.entries(trainingDayMap).map(
