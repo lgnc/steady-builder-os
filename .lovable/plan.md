@@ -1,32 +1,34 @@
 
 
-# Add "Enter Shifts" Button for Shift/FIFO Workers
+# Fix Off-Day Commutes and Remove Reading Blocks
 
-## Overview
-Add a secondary floating action button (FAB) specifically for entering shifts, visible only to shift workers and FIFO workers. This replaces the current approach of tapping a `roster_reminder` block in the calendar grid (which can get lost or buried).
+## Changes
 
-## What Changes
+### 1. Remove "reading" blocks from the entire calendar
+All blocks with `block_type === "reading"` will be filtered out globally in the `effectiveBlocks` logic in `src/pages/Calendar.tsx`. Reading is being folded into the evening routine, so these blocks are no longer needed on the calendar.
 
-### Calendar FAB Area (lines ~848-855 in `Calendar.tsx`)
-- Add a second FAB above the existing "+" button, styled with a clock icon, labeled for shift entry.
-- This button is **only visible** when `isShiftWorker` or `isFifoUser` is true.
-- The existing "+" button for adding events remains unchanged below it.
-- The shift FAB opens the `ShiftEntrySheet` (same as before).
-
-### Layout
-- Shift FAB: positioned at `bottom-40` (above the Add Event FAB at `bottom-24`), slightly smaller or same size, with a distinct color accent (e.g. secondary/outline style or amber tint) so it's visually distinct from the main "+" button.
-- Icon: `Clock` icon (already imported) to clearly indicate "shifts".
-
-### Cleanup
-- The `roster_reminder` block tap handler (line ~749-750) can remain as a secondary way to open it, but the FAB ensures it's always accessible.
+### 2. Remove work commutes on off days
+In `src/lib/shiftScheduleBuilder.ts`, the off-day filter (line 64-67) currently only removes `work` and `roster_reminder` blocks. It will be updated to also remove commute blocks that are work-related (identified by title containing "to work", "from work", "to site", "from site", etc.) so that only gym commutes and other non-work blocks remain on off days.
 
 ## Technical Details
 
-**File: `src/pages/Calendar.tsx`**
-- After the existing FAB (line ~855), add a conditional second FAB:
-  - Condition: `(isShiftWorker || isFifoUser)`
-  - onClick: `setShiftEntryOpen(true)`
-  - Icon: `Clock` from lucide-react (already imported on line 4 -- needs adding)
-  - Position: `fixed bottom-40 right-4` to stack above the existing FAB
-- No other files need changes.
+### File: `src/pages/Calendar.tsx`
+- Add a global filter in the `effectiveBlocks` useMemo to exclude blocks where `block_type === "reading"`, applied before any shift logic runs.
+
+### File: `src/lib/shiftScheduleBuilder.ts`
+- Update the off-day branch (lines 64-67) to also filter out commute blocks whose title indicates a work commute (using the existing `classifyCommute` helper -- roles `"to_work"` and `"from_work"`).
+
+Updated off-day logic:
+```typescript
+if (shift.isOff) {
+  return dayBlocks.filter((b) => {
+    if (b.block_type === "work" || b.block_type === "roster_reminder") return false;
+    if (b.block_type === "commute") {
+      const role = classifyCommute(b.title);
+      if (role === "to_work" || role === "from_work") return false;
+    }
+    return true;
+  });
+}
+```
 
