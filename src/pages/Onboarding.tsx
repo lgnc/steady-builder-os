@@ -658,23 +658,12 @@ export default function OnboardingPage() {
         }
       }
 
-      // Reading time
-      blocks.push({
-        user_id: user.id,
-        block_type: "reading",
-        title: "Read",
-        start_time: addMinutes(bedtime, -60),
-        end_time: addMinutes(bedtime, -30),
-        day_of_week: day,
-        is_locked: true,
-      });
-
-      // Evening Routine
+      // Evening Routine (includes reading time)
       blocks.push({
         user_id: user.id,
         block_type: "evening_routine",
         title: "Evening Routine",
-        start_time: addMinutes(bedtime, -30),
+        start_time: addMinutes(bedtime, -45),
         end_time: bedtime,
         day_of_week: day,
         is_locked: true,
@@ -797,6 +786,13 @@ export default function OnboardingPage() {
       sort_order: idx,
     }));
 
+    const eveningItems = DEFAULT_EVENING_ITEMS.map((title, idx) => ({
+      user_id: user.id,
+      routine_type: "evening_routine",
+      title,
+      sort_order: idx,
+    }));
+
     const strategyItems = DEFAULT_STRATEGY_ITEMS.map((title, idx) => ({
       user_id: user.id,
       routine_type: "strategy",
@@ -804,7 +800,7 @@ export default function OnboardingPage() {
       sort_order: idx,
     }));
 
-    await supabase.from("routine_checklist_items").insert([...morningItems, ...strategyItems]);
+    await supabase.from("routine_checklist_items").insert([...morningItems, ...eveningItems, ...strategyItems]);
   };
 
   if (authLoading) {
@@ -1004,6 +1000,14 @@ const DEFAULT_MORNING_ITEMS = [
   "10-min stretch or mobility",
   "Morning journal entry",
   "Review today's schedule",
+];
+
+const DEFAULT_EVENING_ITEMS = [
+  "Prepare tomorrow's clothes",
+  "Review tomorrow's schedule",
+  "10-min reading",
+  "Gratitude journal",
+  "Lights out",
 ];
 
 const DEFAULT_STRATEGY_ITEMS = [
