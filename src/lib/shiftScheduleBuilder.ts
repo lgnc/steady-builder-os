@@ -62,9 +62,14 @@ export function rebuildDayAroundShift(
 ): ScheduleBlock[] {
   // Off day: remove work blocks and roster_reminder, keep everything else as-is
   if (shift.isOff) {
-    return dayBlocks.filter(
-      (b) => b.block_type !== "work" && b.block_type !== "roster_reminder"
-    );
+    return dayBlocks.filter((b) => {
+      if (b.block_type === "work" || b.block_type === "roster_reminder") return false;
+      if (b.block_type === "commute") {
+        const role = classifyCommute(b.title);
+        if (role === "to_work" || role === "from_work") return false;
+      }
+      return true;
+    });
   }
 
   const isNight = shift.endTime < shift.startTime; // crosses midnight

@@ -367,7 +367,8 @@ export default function CalendarPage() {
 
   // Apply overrides to blocks for the current week view
   const effectiveBlocks = useMemo(() => {
-    let result = blocks;
+    // Remove reading blocks globally (reading is folded into evening routine)
+    let result = blocks.filter((b) => b.block_type !== "reading");
     
     // Apply day-of-week overrides
     if (overrides.length > 0) {
