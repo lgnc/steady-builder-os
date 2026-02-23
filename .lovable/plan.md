@@ -1,49 +1,53 @@
 
+# Roster Reminder for Shift Workers
 
-# Fix On-Site Calendar: Shift Selection + Training Schedule
+## What This Does
 
-## Problems Identified
+Adds a "What day does your roster come out?" question during onboarding for shift workers. A recurring, non-deletable reminder block is then placed on that day in their calendar every week, prompting them to update their shifts.
 
-1. **Shift config sheet not triggering**: The onboarding generates on-site blocks immediately with defaults (and alternates day/night when "both" is selected). When the user later toggles to "On-Site" on the calendar, the `weekHasShiftConfig` check looks for `shift_type` AND `shift_start` in `user_schedule_mode` — but the onboarding never writes to that table. So if a `user_schedule_mode` row exists without shift config (or doesn't exist at all), the sheet may not appear, or old onboarding-generated blocks are shown instead.
+## Changes
 
-2. **Training on every day**: The onboarding `generateOnSiteBlocks` function puts training on ALL 7 days. The calendar's `generateOnSiteBlocksFromConfig` was fixed to check against home training days, but only runs when the shift config sheet is confirmed. If the user never gets the sheet (issue 1), they see the old onboarding blocks with training every day.
+### 1. Database: Add `roster_day` column to `onboarding_data`
 
-## Solution
+- Add a nullable `integer` column `roster_day` (0=Sunday through 6=Saturday, matching existing `day_of_week` convention)
+- Only relevant for `shift_work` and `fifo` work types
 
-### 1. Always show the Shift Config Sheet on first toggle to On-Site each week
+### 2. Onboarding Data Model (`src/pages/Onboarding.tsx`)
 
-**File: `src/pages/Calendar.tsx`**
+- Add `rosterDay: number | null` to the `OnboardingData` interface
+- Default to `null`
+- Save to `onboarding_data.roster_day` during the final submit
 
-- Fix `toggleScheduleMode`: When switching to `on_site`, ALWAYS open the shift config sheet if no shift config exists for this week. The current logic is correct in intent but the `weekHasShiftConfig` state may not be set properly.
-- Fix the `fetchMode` useEffect: Ensure `weekHasShiftConfig` is only true when `shift_start` is explicitly set (not just when `shift_type` has its default value of `'days'`).
+### 3. Work & Availability Step (`src/components/onboarding/WorkStep.tsx`)
 
-### 2. Delete old onboarding-generated on-site blocks and regenerate correctly
+- For shift workers and FIFO users, add a new section: "What day does your roster usually come out?"
+- Display a day-of-week picker (same style as existing rest days / training days pickers)
+- Only visible when `workType` is `shift_work` or `fifo`
 
-**File: `src/pages/Calendar.tsx`** (in `handleShiftConfigConfirm`)
+### 4. Schedule Block Generation (`src/pages/Onboarding.tsx`)
 
-- The existing flow already deletes all `on_site` blocks and regenerates them — this is correct. The fix is making sure the sheet actually opens (issue 1 above).
+- During the schedule building phase, if `rosterDay` is set, insert an additional `schedule_block` with:
+  - `block_type: "roster_reminder"`
+  - `title: "Update Weekly Shifts"`
+  - `is_locked: true` (non-deletable)
+  - `schedule_mode: "home"` (shows on home calendar)
+  - Positioned in the morning after the morning routine (similar to how strategy block finds a gap)
+  - 15-minute block (it's just a reminder/prompt)
 
-### 3. Fix onboarding to not generate on-site blocks at all
+### 5. Calendar Rendering (`src/pages/Calendar.tsx`)
 
-**File: `src/pages/Onboarding.tsx`**
-
-- Remove or skip the call to `generateOnSiteBlocks` during onboarding. On-site blocks should only be generated when the user first toggles to "On-Site" on the calendar and configures their shift via the sheet. This prevents stale/incorrect blocks from existing in the database.
-- The `generateOnSiteBlocks` function can remain but won't be called.
-
-### 4. Fix block filtering when toggling to On-Site with no blocks yet
-
-**File: `src/pages/Calendar.tsx`**
-
-- After `handleShiftConfigConfirm` re-fetches blocks, filter correctly for `on_site` mode (current code already does this).
-- Ensure the re-fetch also updates `scheduledWorkouts` if needed.
+- Add `"roster_reminder"` to the block type color/styling map so it renders distinctly (e.g., amber/orange theme to stand out as an action item)
+- When tapped, it could open a toast or the shift config sheet (stretch goal -- for now just render it as a visible reminder block)
 
 ## Technical Details
 
-### Changes to `src/pages/Onboarding.tsx`
-- Comment out / remove lines ~732-737 that call `generateOnSiteBlocks` and insert on-site blocks during onboarding.
+### Migration SQL
+```sql
+ALTER TABLE public.onboarding_data 
+ADD COLUMN roster_day integer;
+```
 
-### Changes to `src/pages/Calendar.tsx`
-- In the `fetchMode` useEffect (~line 120): tighten the `weekHasShiftConfig` check to require `shift_start` to be a non-null, non-empty value.
-- In `toggleScheduleMode` (~line 129): the existing logic already gates on `weekHasShiftConfig` — once issue 1 is fixed, this will work correctly.
-- In the block filter after re-fetch (~line 202): ensure it filters to `schedule_mode === 'on_site'` only (not falling back to blocks without a mode).
-
+### Files Modified
+- `src/pages/Onboarding.tsx` -- add `rosterDay` to interface, defaults, save logic, and block generation
+- `src/components/onboarding/WorkStep.tsx` -- add roster day picker for shift/FIFO users
+- `src/pages/Calendar.tsx` -- add styling for `roster_reminder` block type
