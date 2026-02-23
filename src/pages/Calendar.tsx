@@ -401,12 +401,18 @@ export default function CalendarPage() {
         const shift = shiftEntries.get(dateStr);
         const dayBlocks = blocksByDay.get(dow) || [];
 
+        // Look up adjacent day shifts for transition awareness
+        const prevDateStr = format(addDays(date, -1), "yyyy-MM-dd");
+        const nextDateStr = format(addDays(date, 1), "yyyy-MM-dd");
+        const prevShift = shiftEntries.get(prevDateStr) || null;
+        const nextShift = shiftEntries.get(nextDateStr) || null;
+
         if (!shift) {
           // No shift entry for this day — keep blocks as-is
           shiftAdjusted.push(...dayBlocks);
         } else {
-          // Rebuild entire day around the shift
-          const rebuilt = rebuildDayAroundShift(dayBlocks, shift, onboardingDurations);
+          // Rebuild entire day around the shift with transition context
+          const rebuilt = rebuildDayAroundShift(dayBlocks, shift, onboardingDurations, prevShift, nextShift);
           shiftAdjusted.push(...rebuilt);
         }
       }
