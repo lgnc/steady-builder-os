@@ -21,7 +21,7 @@ import { MobileLayout } from "@/components/layout/MobileLayout";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { CoachChat } from "@/components/dashboard/CoachChat";
+import { DailyRecap } from "@/components/dashboard/DailyRecap";
 import { DailyHabits } from "@/components/dashboard/DailyHabits";
 import { RoutineChecklistSheet } from "@/components/calendar/RoutineChecklistSheet";
 import { TrainingBlockSheet } from "@/components/calendar/TrainingBlockSheet";
@@ -701,7 +701,16 @@ export default function DashboardPage() {
 
     </div>
 
-      <CoachChat />
+      <DailyRecap
+        context={{
+          completionPct,
+          habitCounts,
+          nutritionCounts,
+          anchorCompletions,
+          isTrainingDay,
+          weeklyCompletion,
+        }}
+      />
 
       {user && (
         <>
