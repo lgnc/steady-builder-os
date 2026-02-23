@@ -1,0 +1,1 @@
+ALTER TABLE public.onboarding_data ADD COLUMN roster_day integer;

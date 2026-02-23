@@ -156,6 +156,33 @@ export function WorkStep({ data, updateData }: WorkStepProps) {
           </div>
         )}
 
+        {/* Roster Day Picker — shift/FIFO only */}
+        {(isShiftWork || isFifo) && (
+          <div className="space-y-3">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <AlertCircle className="h-4 w-4 text-primary" />
+              What day does your roster usually come out?
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {daysOfWeek.map((day, index) => (
+                <button
+                  key={day.value}
+                  onClick={() => updateData({ rosterDay: data.rosterDay === index ? null : index })}
+                  className={cn(
+                    "px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                    data.rosterDay === index
+                      ? "bg-primary/10 text-primary border border-primary/20"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  )}
+                >
+                  {day.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">We'll add a weekly reminder to update your shifts on this day.</p>
+          </div>
+        )}
+
         {/* Training Window */}
         <div className="space-y-3">
           <label className="flex items-center gap-2 text-sm font-medium">

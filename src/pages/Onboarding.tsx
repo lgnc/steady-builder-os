@@ -86,6 +86,9 @@ export interface OnboardingData {
   // Strategy
   strategyDay: number;
 
+  // Roster
+  rosterDay: number | null;
+
   // Habits
   habitsBuild: string[];
   habitsBreak: string[];
@@ -152,6 +155,7 @@ const defaultData: OnboardingData = {
   allergies: "",
   sensitivities: "",
   strategyDay: 0,
+  rosterDay: null,
   habitsBuild: ["Reading", "No screens before bed", "No coffee for 1 hour after waking", "No social media within 1 hour of waking"],
   habitsBreak: ["Porn", "Doom scrolling", "Vaping", "Screens before bed"],
 };
@@ -309,6 +313,7 @@ export default function OnboardingPage() {
           allergies: data.allergies || null,
           sensitivities: data.sensitivities || null,
           strategy_day: data.strategyDay,
+          roster_day: data.rosterDay,
           onboarding_habits_build: data.habitsBuild,
           onboarding_habits_break: data.habitsBreak,
           onboarding_completed: true,
@@ -724,6 +729,38 @@ export default function OnboardingPage() {
       day_of_week: strategyDay,
       is_locked: false,
     });
+
+    // Roster Reminder block for shift/FIFO workers
+    if (data.rosterDay !== null && (data.workType === 'shift_work' || data.workType === 'fifo')) {
+      const rosterDay = data.rosterDay;
+      const rosterDayBlocks = blocks.filter((b: any) => b.day_of_week === rosterDay && b.block_type !== "sleep");
+      const morningRoutineOnRosterDay = rosterDayBlocks.find((b: any) => b.block_type === "morning_routine");
+      const rosterWakeTime = (rosterDay >= 1 && rosterDay <= 5) ? data.weekdayWakeTime : data.weekendWakeTime;
+      const rosterMorningEnd = morningRoutineOnRosterDay ? morningRoutineOnRosterDay.end_time : addMinutes(rosterWakeTime, 45);
+
+      const rosterOtherBlocks = rosterDayBlocks
+        .filter((b: any) => b.block_type !== "morning_routine")
+        .sort((a: any, b: any) => a.start_time.localeCompare(b.start_time));
+
+      let rosterStart = rosterMorningEnd;
+      const rosterDurationMinutes = 15;
+
+      for (const block of rosterOtherBlocks) {
+        const candidateEnd = addMinutes(rosterStart, rosterDurationMinutes);
+        if (candidateEnd <= block.start_time) break;
+        if (block.end_time > rosterStart) rosterStart = block.end_time;
+      }
+
+      blocks.push({
+        user_id: user.id,
+        block_type: "roster_reminder",
+        title: "Update Weekly Shifts",
+        start_time: rosterStart,
+        end_time: addMinutes(rosterStart, rosterDurationMinutes),
+        day_of_week: rosterDay,
+        is_locked: true,
+      });
+    }
 
     // Tag all home blocks with schedule_mode
     const homeBlocks = blocks.map((b: any) => ({ ...b, schedule_mode: 'home' }));
