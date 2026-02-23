@@ -2,6 +2,14 @@ import { Lock, GripVertical, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ScheduleBlock } from "@/hooks/useBlockDrag";
 
+/** Format "HH:MM" → compact like "7:30a" or "9p" */
+function formatCompactTime(time: string): string {
+  const [h, m] = time.split(":").map(Number);
+  const hour12 = h % 12 || 12;
+  const suffix = h < 12 ? "a" : "p";
+  return m === 0 ? `${hour12}${suffix}` : `${hour12}:${m.toString().padStart(2, "0")}${suffix}`;
+}
+
 interface ResizePreview {
   topDelta: number;
   heightDelta: number;
@@ -47,6 +55,7 @@ export function DraggableBlock({
   const finalTop = style.top + dragOffset + topDelta;
   const finalHeight = Math.max(style.height + heightDelta, 3);
   const showText = finalHeight >= 18;
+  const showTime = finalHeight >= 30;
 
   return (
     <div
@@ -88,9 +97,16 @@ export function DraggableBlock({
           {block.is_locked && (
             <Lock className="h-2 w-2 shrink-0 mt-0.5 opacity-60" />
           )}
-          <span className="text-[9px] font-medium leading-tight line-clamp-2">
-            {block.title}
-          </span>
+          <div className="min-w-0">
+            <span className="text-[9px] font-medium leading-tight line-clamp-2 block">
+              {block.title}
+            </span>
+            {showTime && (
+              <span className="text-[7px] leading-tight opacity-60 block">
+                {formatCompactTime(block.start_time)} – {formatCompactTime(block.end_time)}
+              </span>
+            )}
+          </div>
         </div>
       )}
 
