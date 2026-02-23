@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, startOfWeek, addDays, isSameDay } from "date-fns";
-import { ChevronLeft, ChevronRight, Lock, Plus, Trash2, Home, HardHat } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, Lock, Plus, Trash2, Home, HardHat } from "lucide-react";
 import { ShiftConfigSheet } from "@/components/calendar/ShiftConfigSheet";
 import { ShiftEntrySheet } from "@/components/calendar/ShiftEntrySheet";
 import { rebuildDayAroundShift, addMinutesTime, type OnboardingDurations, type ShiftEntry } from "@/lib/shiftScheduleBuilder";
@@ -844,6 +844,17 @@ export default function CalendarPage() {
           </div>
         </div>
       </div>
+
+      {/* FAB - Enter Shifts (shift/FIFO workers only) */}
+      {(isShiftWorker || isFifoUser) && (
+        <button
+          onClick={() => setShiftEntryOpen(true)}
+          className="fixed bottom-40 right-4 z-30 w-12 h-12 rounded-full bg-accent text-accent-foreground shadow-lg flex items-center justify-center hover:bg-accent/80 active:scale-95 transition-all border border-border"
+          aria-label="Enter shifts"
+        >
+          <Clock className="h-5 w-5" />
+        </button>
+      )}
 
       {/* FAB - Add Event */}
       <button
