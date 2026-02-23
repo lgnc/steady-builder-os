@@ -744,6 +744,36 @@ export type Database = {
           },
         ]
       }
+      shift_entries: {
+        Row: {
+          created_at: string
+          end_time: string | null
+          id: string
+          is_off: boolean
+          shift_date: string
+          start_time: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          is_off?: boolean
+          shift_date: string
+          start_time?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          is_off?: boolean
+          shift_date?: string
+          start_time?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       streaks: {
         Row: {
           created_at: string
