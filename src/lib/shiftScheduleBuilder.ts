@@ -126,11 +126,10 @@ export function rebuildDayAroundShift(
     const wakeAnchor = morningRoutine
       ? addMinutesTime(morningAnchor, -blockDuration(morningRoutine))
       : morningAnchor;
+    const sleepMinutes = durations.sleepDuration * 60;
+    const sleepStartTime = addMinutesTime(wakeAnchor, -sleepMinutes);
     if (sleepBlock) {
-      // Calculate bedtime from sleep duration working backwards, or use onboarding bedtime
-      const sleepMinutes = durations.sleepDuration * 60;
-      const sleepStart = addMinutesTime(wakeAnchor, -sleepMinutes);
-      place(sleepBlock, sleepStart, wakeAnchor);
+      place(sleepBlock, sleepStartTime, wakeAnchor);
     }
 
     // 4. Work/Shift
@@ -187,16 +186,12 @@ export function rebuildDayAroundShift(
       // else: training doesn't fit, omit for this day
     }
 
-    // 7. Evening routine: before bedtime
+    // 7. Evening routine: 1 hour before sleep starts
     const eveningRoutine = getFirst("evening_routine");
     if (eveningRoutine) {
-      const dur = blockDuration(eveningRoutine);
-      // Use a sensible bedtime: sleep_duration hours before wake time would be ideal,
-      // but let's use the latest reasonable bedtime capped at 23:00
-      const latestBed = "23:00";
-      const bedtimeTarget = durations.bedtime <= latestBed ? durations.bedtime : latestBed;
-      const routineStart = addMinutesTime(bedtimeTarget, -dur);
-      place(eveningRoutine, routineStart, bedtimeTarget);
+      const eveningEnd = sleepStartTime;
+      const eveningStart = addMinutesTime(eveningEnd, -60);
+      place(eveningRoutine, eveningStart, eveningEnd);
     }
 
     // 8. Any other blocks (strategy, reading, custom, etc.) — keep as-is unless they overlap with shift
