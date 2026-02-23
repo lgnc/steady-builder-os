@@ -361,6 +361,7 @@ export type Database = {
           protein_target: number | null
           reading_habit: number | null
           rest_days: string[] | null
+          roster_day: number | null
           secondary_goals: string[] | null
           selected_program: string | null
           sensitivities: string | null
@@ -413,6 +414,7 @@ export type Database = {
           protein_target?: number | null
           reading_habit?: number | null
           rest_days?: string[] | null
+          roster_day?: number | null
           secondary_goals?: string[] | null
           selected_program?: string | null
           sensitivities?: string | null
@@ -465,6 +467,7 @@ export type Database = {
           protein_target?: number | null
           reading_habit?: number | null
           rest_days?: string[] | null
+          roster_day?: number | null
           secondary_goals?: string[] | null
           selected_program?: string | null
           sensitivities?: string | null

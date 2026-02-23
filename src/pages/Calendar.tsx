@@ -384,6 +384,8 @@ export default function CalendarPage() {
         return "cal-block-custom";
       case "strategy":
         return "cal-block-strategy";
+      case "roster_reminder":
+        return "cal-block-roster";
       default:
         return "cal-block-default";
     }
