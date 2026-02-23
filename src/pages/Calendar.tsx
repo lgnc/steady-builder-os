@@ -4,6 +4,7 @@ import { format, startOfWeek, addDays, isSameDay } from "date-fns";
 import { ChevronLeft, ChevronRight, Lock, Plus, Trash2, Home, HardHat } from "lucide-react";
 import { ShiftConfigSheet } from "@/components/calendar/ShiftConfigSheet";
 import { ShiftEntrySheet } from "@/components/calendar/ShiftEntrySheet";
+import { rebuildDayAroundShift, addMinutesTime, type OnboardingDurations, type ShiftEntry } from "@/lib/shiftScheduleBuilder";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -66,7 +67,17 @@ export default function CalendarPage() {
   const [isShiftWorker, setIsShiftWorker] = useState(false);
 
   // Shift entries for date-specific schedule overrides
-  const [shiftEntries, setShiftEntries] = useState<Map<string, { startTime: string; endTime: string; isOff: boolean }>>(new Map());
+  const [shiftEntries, setShiftEntries] = useState<Map<string, ShiftEntry>>(new Map());
+
+  // Onboarding durations for shift schedule rebuilding
+  const [onboardingDurations, setOnboardingDurations] = useState<OnboardingDurations>({
+    commuteMinutes: 30,
+    gymCommuteMinutes: 15,
+    workToGymMinutes: 15,
+    sleepDuration: 8,
+    bedtime: "22:00",
+    weekendBedtime: "23:00",
+  });
 
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -103,12 +114,20 @@ export default function CalendarPage() {
       if (!user) return;
       const { data } = await supabase
         .from("onboarding_data")
-        .select("work_type, fifo_shift_length")
+        .select("work_type, fifo_shift_length, commute_minutes, gym_commute_minutes, work_to_gym_minutes, sleep_duration, bedtime, weekend_bedtime")
         .eq("user_id", user.id)
         .single();
       setIsFifoUser(data?.work_type === 'fifo');
       setIsShiftWorker(data?.work_type === 'shift_work' || data?.work_type === 'fifo');
       if (data?.fifo_shift_length) setFifoShiftLength(data.fifo_shift_length);
+      setOnboardingDurations({
+        commuteMinutes: data?.commute_minutes ?? 30,
+        gymCommuteMinutes: data?.gym_commute_minutes ?? 15,
+        workToGymMinutes: data?.work_to_gym_minutes ?? 15,
+        sleepDuration: data?.sleep_duration ?? 8,
+        bedtime: data?.bedtime ?? "22:00",
+        weekendBedtime: data?.weekend_bedtime ?? "23:00",
+      });
     };
     checkWorkType();
   }, [user]);
@@ -361,82 +380,41 @@ export default function CalendarPage() {
       });
     }
 
-    // Apply shift entries: replace template work blocks with actual shift times
+    // Apply shift entries: rebuild entire day schedule around shift times
     if (shiftEntries.size > 0) {
       const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
       const shiftAdjusted: ScheduleBlock[] = [];
 
+      // Group blocks by day_of_week
+      const blocksByDay = new Map<number, ScheduleBlock[]>();
       result.forEach((block) => {
-        const dateForBlock = weekDates.find((d) => d.getDay() === block.day_of_week);
-        if (!dateForBlock) { shiftAdjusted.push(block); return; }
-        const dateStr = format(dateForBlock, "yyyy-MM-dd");
-        const shift = shiftEntries.get(dateStr);
-
-        if (!shift) { shiftAdjusted.push(block); return; }
-
-        if (shift.isOff) {
-          // Off day: keep non-work blocks (home template), remove work blocks
-          if (block.block_type !== "work") {
-            shiftAdjusted.push(block);
-          }
-          return;
-        }
-
-        // Working day: replace work block times with shift times
-        if (block.block_type === "work") {
-          shiftAdjusted.push({
-            ...block,
-            start_time: shift.startTime,
-            end_time: shift.endTime,
-            title: "Shift",
-          });
-        } else if (block.block_type === "morning_routine") {
-          // Auto-adjust: morning routine ends before shift start
-          const routineDuration = 30; // minutes
-          const routineEnd = shift.startTime;
-          const routineStart = addMinutesTime(routineEnd, -routineDuration);
-          shiftAdjusted.push({ ...block, start_time: routineStart, end_time: routineEnd });
-        } else if (block.block_type === "evening_routine") {
-          // Auto-adjust: evening routine stays relative to bedtime
-          // For night shifts, skip evening routine
-          const isNight = shift.endTime < shift.startTime;
-          if (!isNight) {
-            const routineDuration = 45;
-            const bedtime = addMinutesTime(shift.endTime, 180);
-            const cappedBed = bedtime > "23:30" ? "22:30" : bedtime;
-            shiftAdjusted.push({
-              ...block,
-              start_time: addMinutesTime(cappedBed, -routineDuration),
-              end_time: cappedBed,
-            });
-          }
-        } else if (block.block_type === "training" && block.training_day_id) {
-          // Auto-adjust: find gap after shift for training
-          const isNight = shift.endTime < shift.startTime;
-          if (!isNight) {
-            const trainingStart = addMinutesTime(shift.endTime, 30);
-            const trainingEnd = addMinutesTime(trainingStart, 45);
-            if (trainingEnd <= "21:00") {
-              shiftAdjusted.push({ ...block, start_time: trainingStart, end_time: trainingEnd });
-            }
-          } else {
-            // Night shift: training before shift
-            const trainingEnd = addMinutesTime(shift.startTime, -30);
-            const trainingStart = addMinutesTime(trainingEnd, -45);
-            if (trainingStart >= "10:00") {
-              shiftAdjusted.push({ ...block, start_time: trainingStart, end_time: trainingEnd });
-            }
-          }
-        } else {
-          shiftAdjusted.push(block);
-        }
+        const list = blocksByDay.get(block.day_of_week) || [];
+        list.push(block);
+        blocksByDay.set(block.day_of_week, list);
       });
+
+      for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+        const date = weekDates[dayIdx];
+        const dow = date.getDay();
+        const dateStr = format(date, "yyyy-MM-dd");
+        const shift = shiftEntries.get(dateStr);
+        const dayBlocks = blocksByDay.get(dow) || [];
+
+        if (!shift) {
+          // No shift entry for this day — keep blocks as-is
+          shiftAdjusted.push(...dayBlocks);
+        } else {
+          // Rebuild entire day around the shift
+          const rebuilt = rebuildDayAroundShift(dayBlocks, shift, onboardingDurations);
+          shiftAdjusted.push(...rebuilt);
+        }
+      }
 
       return shiftAdjusted;
     }
 
     return result;
-  }, [blocks, overrides, shiftEntries, weekStart]);
+  }, [blocks, overrides, shiftEntries, weekStart, onboardingDurations]);
 
   // Compute dynamic start hour based on earliest block
   const startHourOfGrid = useMemo(() => {
@@ -985,15 +963,8 @@ export default function CalendarPage() {
   );
 }
 
-// Helper to generate on-site blocks from shift config
-function addMinutesTime(time: string, minutes: number): string {
-  const [hours, mins] = time.split(":").map(Number);
-  const totalMinutes = hours * 60 + mins + minutes;
-  const normalizedMinutes = ((totalMinutes % (24 * 60)) + 24 * 60) % (24 * 60);
-  const newHours = Math.floor(normalizedMinutes / 60);
-  const newMins = normalizedMinutes % 60;
-  return `${newHours.toString().padStart(2, "0")}:${newMins.toString().padStart(2, "0")}`;
-}
+
+
 
 function generateOnSiteBlocksFromConfig(
   userId: string,
