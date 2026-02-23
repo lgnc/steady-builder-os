@@ -411,8 +411,27 @@ export default function CalendarPage() {
         }
       }
 
-      return shiftAdjusted;
+      result = shiftAdjusted;
     }
+
+    // Global: anchor evening routine to 1 hour before sleep on every day
+    const sleepByDay = new Map<number, ScheduleBlock>();
+    result.forEach((b) => {
+      if (b.block_type === "sleep") sleepByDay.set(b.day_of_week, b);
+    });
+    result = result.map((b) => {
+      if (b.block_type === "evening_routine") {
+        const sleep = sleepByDay.get(b.day_of_week);
+        if (sleep) {
+          const eveningEnd = sleep.start_time;
+          const [h, m] = eveningEnd.split(":").map(Number);
+          const totalMin = ((h * 60 + m - 60) % 1440 + 1440) % 1440;
+          const eveningStart = `${Math.floor(totalMin / 60).toString().padStart(2, "0")}:${(totalMin % 60).toString().padStart(2, "0")}`;
+          return { ...b, start_time: eveningStart, end_time: eveningEnd };
+        }
+      }
+      return b;
+    });
 
     return result;
   }, [blocks, overrides, shiftEntries, weekStart, onboardingDurations]);
