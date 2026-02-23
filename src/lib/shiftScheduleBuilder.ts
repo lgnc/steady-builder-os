@@ -52,6 +52,55 @@ function classifyCommute(title: string): CommuteRole {
   return "other";
 }
 
+const COMMUTE_TITLES: Record<Exclude<CommuteRole, "other">, string> = {
+  to_work: "Drive to Work",
+  from_work: "Drive Home from Work",
+  to_gym: "Drive to Gym",
+  from_gym: "Drive Home from Gym",
+  gym_to_work: "Gym to Work",
+};
+
+function commuteRoleDuration(role: CommuteRole, durations: OnboardingDurations): number {
+  switch (role) {
+    case "to_work":
+    case "from_work":
+      return durations.commuteMinutes;
+    case "to_gym":
+    case "from_gym":
+      return durations.gymCommuteMinutes;
+    case "gym_to_work":
+      return durations.workToGymMinutes;
+    default:
+      return 0;
+  }
+}
+
+/** Get an existing commute or create a synthetic one from durations */
+function getOrCreateCommute(
+  role: Exclude<CommuteRole, "other">,
+  commutesByRole: Map<CommuteRole, ScheduleBlock>,
+  durations: OnboardingDurations,
+  dayOfWeek: number
+): { block: ScheduleBlock; duration: number } | null {
+  const existing = commutesByRole.get(role);
+  if (existing) {
+    return { block: existing, duration: blockDuration(existing) };
+  }
+  const dur = commuteRoleDuration(role, durations);
+  if (dur <= 0) return null;
+  const synth: ScheduleBlock = {
+    id: `synth_${role}_${dayOfWeek}`,
+    title: COMMUTE_TITLES[role],
+    block_type: "commute",
+    day_of_week: dayOfWeek,
+    start_time: "00:00",
+    end_time: "00:00",
+    is_locked: false,
+    training_day_id: null,
+  };
+  return { block: synth, duration: dur };
+}
+
 // ── Transition detection ───────────────────────────────────
 
 type ShiftKind = "day" | "night" | "off";
@@ -158,13 +207,14 @@ function rebuildOffDay(
   if (prevKind === "night" && prevDayShift) {
     // ─── OFF DAY AFTER NIGHT SHIFT ─────────────────────
     // Recovery sleep in morning, then normal bedtime evening
-    const commuteFromWork = commutesByRole.get("from_work");
-    const commuteFromWorkDur = commuteFromWork ? blockDuration(commuteFromWork) : durations.commuteMinutes;
+    const dayOfWeek = dayBlocks[0]?.day_of_week ?? 0;
+    const commuteFromWorkData = getOrCreateCommute("from_work", commutesByRole, durations, dayOfWeek);
+    const commuteFromWorkDur = commuteFromWorkData?.duration ?? 0;
     const arriveHome = addMinutesTime(prevDayShift.endTime, commuteFromWorkDur);
 
     // Place commute home
-    if (commuteFromWork && commuteFromWorkDur > 0) {
-      place(commuteFromWork, prevDayShift.endTime, arriveHome);
+    if (commuteFromWorkData && commuteFromWorkDur > 0) {
+      place(commuteFromWorkData.block, prevDayShift.endTime, arriveHome);
     }
 
     // Recovery sleep: arrive home → sleep for full duration
@@ -187,7 +237,7 @@ function rebuildOffDay(
     const routineEnd = morningRoutine
       ? addMinutesTime(wakeTime, blockDuration(morningRoutine))
       : wakeTime;
-    placeTrainingCluster(blocksByType, commutesByRole, routineEnd, "21:00", result);
+    placeTrainingCluster(blocksByType, commutesByRole, routineEnd, "21:00", result, durations, dayOfWeek);
 
     // Evening routine + normal bedtime sleep handled by global anchor in Calendar.tsx
     // Place a second sleep block at normal bedtime
@@ -233,12 +283,13 @@ function rebuildOffDay(
     }
 
     // Training in morning/early afternoon
-    placeTrainingCluster(blocksByType, commutesByRole, cursor, "14:00", result);
+    placeTrainingCluster(blocksByType, commutesByRole, cursor, "14:00", result, durations, dayBlocks[0]?.day_of_week ?? 0);
 
     // Pre-shift nap: 90 min in afternoon (~14:00-15:30)
     if (sleepBlock && nextDayShift) {
-      const commuteToWork = commutesByRole.get("to_work");
-      const commuteToWorkDur = commuteToWork ? blockDuration(commuteToWork) : durations.commuteMinutes;
+      const dayOfWeek2 = dayBlocks[0]?.day_of_week ?? 0;
+      const commuteToWorkData = getOrCreateCommute("to_work", commutesByRole, durations, dayOfWeek2);
+      const commuteToWorkDur = commuteToWorkData?.duration ?? 0;
       const commuteToWorkStart = addMinutesTime(nextDayShift.startTime, -commuteToWorkDur);
 
       // Nap ends 2h before commute start (time for evening routine + buffer)
@@ -265,8 +316,8 @@ function rebuildOffDay(
       }
 
       // Commute to work (night shift starts today)
-      if (commuteToWork && commuteToWorkDur > 0) {
-        place(commuteToWork, commuteToWorkStart, nextDayShift.startTime);
+      if (commuteToWorkData && commuteToWorkDur > 0) {
+        place(commuteToWorkData.block, commuteToWorkStart, nextDayShift.startTime);
       }
 
       // Work block for the night shift
@@ -307,28 +358,30 @@ function buildDayShift(
   const prevKind = shiftKind(prevDayShift);
   const nextKind = shiftKind(nextDayShift);
 
+  const dayOfWeek = dayBlocks[0]?.day_of_week ?? 0;
+
   // 1. Commute to work
-  const commuteToWork = commutesByRole.get("to_work");
-  const commuteToWorkDur = commuteToWork ? blockDuration(commuteToWork) : durations.commuteMinutes;
+  const commuteToWorkData = getOrCreateCommute("to_work", commutesByRole, durations, dayOfWeek);
+  const commuteToWorkDur = commuteToWorkData?.duration ?? 0;
   const commuteToWorkStart = addMinutesTime(shift.startTime, -commuteToWorkDur);
-  if (commuteToWork && commuteToWorkDur > 0) {
-    place(commuteToWork, commuteToWorkStart, shift.startTime);
+  if (commuteToWorkData && commuteToWorkDur > 0) {
+    place(commuteToWorkData.block, commuteToWorkStart, shift.startTime);
   }
 
   // 2. Morning routine
   const morningRoutine = getFirst("morning_routine");
-  const morningAnchor = commuteToWork && commuteToWorkDur > 0 ? commuteToWorkStart : shift.startTime;
+  const morningAnchor = commuteToWorkData && commuteToWorkDur > 0 ? commuteToWorkStart : shift.startTime;
 
   if (prevKind === "night" && prevDayShift) {
     // ─── DAY AFTER NIGHT SHIFT ─────────────────────────
     // Post-shift recovery sleep first, then morning routine
-    const commuteFromWorkPrev = commutesByRole.get("from_work");
-    const commuteFromWorkDur = commuteFromWorkPrev ? blockDuration(commuteFromWorkPrev) : durations.commuteMinutes;
+    const commuteFromWorkPrevData = getOrCreateCommute("from_work", commutesByRole, durations, dayOfWeek);
+    const commuteFromWorkDur = commuteFromWorkPrevData?.duration ?? 0;
     const arriveHome = addMinutesTime(prevDayShift.endTime, commuteFromWorkDur);
 
     // Commute home from night shift
-    if (commuteFromWorkPrev && commuteFromWorkDur > 0) {
-      place(commuteFromWorkPrev, prevDayShift.endTime, arriveHome);
+    if (commuteFromWorkPrevData && commuteFromWorkDur > 0) {
+      place(commuteFromWorkPrevData.block, prevDayShift.endTime, arriveHome);
     }
 
     // Shortened recovery sleep to reset circadian rhythm
@@ -371,18 +424,18 @@ function buildDayShift(
   }
 
   // 4. Commute home from work
-  const commuteFromWork = commutesByRole.get("from_work");
-  const commuteFromWorkDur = commuteFromWork ? blockDuration(commuteFromWork) : durations.commuteMinutes;
+  const commuteFromWorkData = getOrCreateCommute("from_work", commutesByRole, durations, dayOfWeek);
+  const commuteFromWorkDur = commuteFromWorkData?.duration ?? 0;
   const commuteFromWorkEnd = addMinutesTime(shift.endTime, commuteFromWorkDur);
-  if (commuteFromWork && commuteFromWorkDur > 0) {
-    place(commuteFromWork, shift.endTime, commuteFromWorkEnd);
+  if (commuteFromWorkData && commuteFromWorkDur > 0) {
+    place(commuteFromWorkData.block, shift.endTime, commuteFromWorkEnd);
   }
 
   // 5. Training + gym commutes after shift
-  const afterShift = commuteFromWork && commuteFromWorkDur > 0
+  const afterShift = commuteFromWorkData && commuteFromWorkDur > 0
     ? addMinutesTime(commuteFromWorkEnd, 15)
     : addMinutesTime(shift.endTime, 15);
-  placeTrainingCluster(blocksByType, commutesByRole, afterShift, "21:00", result);
+  placeTrainingCluster(blocksByType, commutesByRole, afterShift, "21:00", result, durations, dayOfWeek);
 
   // 6. Evening sleep
   if (nextKind === "night" && nextDayShift) {
@@ -439,25 +492,23 @@ function buildNightShift(
   };
   const prevKind = shiftKind(prevDayShift);
 
+  const dayOfWeek = dayBlocks[0]?.day_of_week ?? 0;
+
   // Commute to work duration
-  const commuteToWork = commutesByRole.get("to_work");
-  const commuteToWorkDur = commuteToWork ? blockDuration(commuteToWork) : durations.commuteMinutes;
+  const commuteToWorkData = getOrCreateCommute("to_work", commutesByRole, durations, dayOfWeek);
+  const commuteToWorkDur = commuteToWorkData?.duration ?? 0;
   const commuteToWorkStart = addMinutesTime(shift.startTime, -commuteToWorkDur);
 
   if (prevKind === "night" && prevDayShift) {
     // ─── NIGHT → NIGHT ────────────────────────────────
-    // Morning: commute home, post-shift sleep, routine, activities, evening routine, commute, shift
-
-    const commuteFromWork = commutesByRole.get("from_work");
-    const commuteFromWorkDur = commuteFromWork ? blockDuration(commuteFromWork) : durations.commuteMinutes;
+    const commuteFromWorkData = getOrCreateCommute("from_work", commutesByRole, durations, dayOfWeek);
+    const commuteFromWorkDur = commuteFromWorkData?.duration ?? 0;
     const arriveHome = addMinutesTime(prevDayShift.endTime, commuteFromWorkDur);
 
-    // Commute home from previous night shift
-    if (commuteFromWork && commuteFromWorkDur > 0) {
-      place(commuteFromWork, prevDayShift.endTime, arriveHome);
+    if (commuteFromWorkData && commuteFromWorkDur > 0) {
+      place(commuteFromWorkData.block, prevDayShift.endTime, arriveHome);
     }
 
-    // Post-shift sleep
     const sleepBlock = getFirst("sleep");
     const sleepMinutes = durations.sleepDuration * 60;
     const sleepEnd = addMinutesTime(arriveHome, sleepMinutes);
@@ -465,7 +516,6 @@ function buildNightShift(
       place(sleepBlock, arriveHome, sleepEnd);
     }
 
-    // Morning routine after waking
     const morningRoutine = getFirst("morning_routine");
     let cursor = sleepEnd;
     if (morningRoutine) {
@@ -474,8 +524,7 @@ function buildNightShift(
       cursor = addMinutesTime(cursor, dur);
     }
 
-    // Training in afternoon gap
-    placeTrainingCluster(blocksByType, commutesByRole, cursor, commuteToWorkStart, result);
+    placeTrainingCluster(blocksByType, commutesByRole, cursor, commuteToWorkStart, result, durations, dayOfWeek);
 
   } else {
     // ─── DAY/OFF → NIGHT (transition day) ──────────────
@@ -501,7 +550,7 @@ function buildNightShift(
     }
 
     // Training in the morning/early afternoon
-    placeTrainingCluster(blocksByType, commutesByRole, cursor, "14:00", result);
+    placeTrainingCluster(blocksByType, commutesByRole, cursor, "14:00", result, durations, dayOfWeek);
 
     // Pre-shift nap: 90 min, ending ~2h before commute
     if (sleepBlock) {
@@ -528,8 +577,8 @@ function buildNightShift(
   }
 
   // Commute to work
-  if (commuteToWork && commuteToWorkDur > 0) {
-    place(commuteToWork, commuteToWorkStart, shift.startTime);
+  if (commuteToWorkData && commuteToWorkDur > 0) {
+    place(commuteToWorkData.block, commuteToWorkStart, shift.startTime);
   }
 
   // Work/Shift
@@ -567,17 +616,25 @@ function placeTrainingCluster(
   commutesByRole: Map<CommuteRole, ScheduleBlock>,
   earliest: string,
   latest: string,
-  result: ScheduleBlock[]
+  result: ScheduleBlock[],
+  durations?: OnboardingDurations,
+  dayOfWeek?: number
 ) {
   const trainingBlock = (blocksByType.get("training") || [])[0];
   if (!trainingBlock || !trainingBlock.training_day_id) return;
 
   const trainingDur = blockDuration(trainingBlock);
-  const commuteToGym = commutesByRole.get("to_gym");
-  const commuteFromGym = commutesByRole.get("from_gym");
+  const dow = dayOfWeek ?? trainingBlock.day_of_week;
 
-  const toGymDur = commuteToGym ? blockDuration(commuteToGym) : 0;
-  const fromGymDur = commuteFromGym ? blockDuration(commuteFromGym) : 0;
+  const toGymData = durations
+    ? getOrCreateCommute("to_gym", commutesByRole, durations, dow)
+    : commutesByRole.get("to_gym") ? { block: commutesByRole.get("to_gym")!, duration: blockDuration(commutesByRole.get("to_gym")!) } : null;
+  const fromGymData = durations
+    ? getOrCreateCommute("from_gym", commutesByRole, durations, dow)
+    : commutesByRole.get("from_gym") ? { block: commutesByRole.get("from_gym")!, duration: blockDuration(commutesByRole.get("from_gym")!) } : null;
+
+  const toGymDur = toGymData?.duration ?? 0;
+  const fromGymDur = fromGymData?.duration ?? 0;
   const clusterDur = toGymDur + trainingDur + fromGymDur;
 
   const clusterStart = earliest;
@@ -589,14 +646,14 @@ function placeTrainingCluster(
 
   if (toMin(clusterEnd) <= latestMin) {
     let cursor = clusterStart;
-    if (commuteToGym && toGymDur > 0) {
-      result.push({ ...commuteToGym, start_time: cursor, end_time: addMinutesTime(cursor, toGymDur) });
+    if (toGymData && toGymDur > 0) {
+      result.push({ ...toGymData.block, start_time: cursor, end_time: addMinutesTime(cursor, toGymDur) });
       cursor = addMinutesTime(cursor, toGymDur);
     }
     result.push({ ...trainingBlock, start_time: cursor, end_time: addMinutesTime(cursor, trainingDur) });
     cursor = addMinutesTime(cursor, trainingDur);
-    if (commuteFromGym && fromGymDur > 0) {
-      result.push({ ...commuteFromGym, start_time: cursor, end_time: addMinutesTime(cursor, fromGymDur) });
+    if (fromGymData && fromGymDur > 0) {
+      result.push({ ...fromGymData.block, start_time: cursor, end_time: addMinutesTime(cursor, fromGymDur) });
     }
   }
 }
