@@ -453,11 +453,25 @@ export default function OnboardingPage() {
 
     const trainingDayMap: Record<number, string> = {};
     if (trainingDaysData) {
-      trainingDaysData.forEach((td, idx) => {
-        if (idx < availableDays.length) {
-          trainingDayMap[availableDays[idx]] = td.id;
-        }
-      });
+      const programDays = trainingDaysData.length;
+      const totalAvailable = availableDays.length;
+
+      if (programDays >= totalAvailable) {
+        // Use all available days
+        trainingDaysData.forEach((td, idx) => {
+          if (idx < totalAvailable) {
+            trainingDayMap[availableDays[idx]] = td.id;
+          }
+        });
+      } else {
+        // Evenly distribute: e.g. 4 sessions across 5 days → Mon, Tue, Thu, Fri
+        const spacing = totalAvailable / programDays;
+        trainingDaysData.forEach((td, idx) => {
+          const slotIdx = Math.round(idx * spacing);
+          const clampedIdx = Math.min(slotIdx, totalAvailable - 1);
+          trainingDayMap[availableDays[clampedIdx]] = td.id;
+        });
+      }
     }
 
     const homeToWork = data.commuteMinutes || 0;

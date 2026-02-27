@@ -65,6 +65,7 @@ export default function CalendarPage() {
   // Shift entry sheet state
   const [shiftEntryOpen, setShiftEntryOpen] = useState(false);
   const [isShiftWorker, setIsShiftWorker] = useState(false);
+  const [onboardingCompletedAt, setOnboardingCompletedAt] = useState<string | null>(null);
 
   // Shift entries for date-specific schedule overrides
   const [shiftEntries, setShiftEntries] = useState<Map<string, ShiftEntry>>(new Map());
@@ -114,9 +115,10 @@ export default function CalendarPage() {
       if (!user) return;
       const { data } = await supabase
         .from("onboarding_data")
-        .select("work_type, fifo_shift_length, commute_minutes, gym_commute_minutes, work_to_gym_minutes, sleep_duration, bedtime, weekend_bedtime")
+        .select("work_type, fifo_shift_length, commute_minutes, gym_commute_minutes, work_to_gym_minutes, sleep_duration, bedtime, weekend_bedtime, updated_at")
         .eq("user_id", user.id)
         .single();
+      if (data?.updated_at) setOnboardingCompletedAt(data.updated_at);
       setIsFifoUser(data?.work_type === 'fifo');
       setIsShiftWorker(data?.work_type === 'shift_work' || data?.work_type === 'fifo');
       if (data?.fifo_shift_length) setFifoShiftLength(data.fifo_shift_length);
@@ -260,12 +262,17 @@ export default function CalendarPage() {
     const fetchShiftEntries = async () => {
       if (!user || !isShiftWorker) return;
       const weekDates = Array.from({ length: 7 }, (_, i) => format(addDays(weekStart, i), "yyyy-MM-dd"));
-      const { data } = await supabase
+      let query = supabase
         .from("shift_entries")
         .select("*")
         .eq("user_id", user.id)
         .gte("shift_date", weekDates[0])
         .lte("shift_date", weekDates[6]);
+      // Only use shift entries created after the latest onboarding completion
+      if (onboardingCompletedAt) {
+        query = query.gte("created_at", onboardingCompletedAt);
+      }
+      const { data } = await query;
 
       const map = new Map<string, { startTime: string; endTime: string; isOff: boolean }>();
       (data || []).forEach((entry: any) => {
@@ -278,7 +285,7 @@ export default function CalendarPage() {
       setShiftEntries(map);
     };
     fetchShiftEntries();
-  }, [user, isShiftWorker, weekStart]);
+  }, [user, isShiftWorker, weekStart, onboardingCompletedAt]);
 
   // Fetch overrides for the current week
   useEffect(() => {
