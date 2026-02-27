@@ -205,7 +205,21 @@ export default function OnboardingPage() {
   }, [user, navigate]);
 
   const updateData = (updates: Partial<OnboardingData>) => {
-    setData((prev) => ({ ...prev, ...updates }));
+    setData((prev) => {
+      const next = { ...prev, ...updates };
+      // Clear phantom work hours when switching away from standard
+      if (updates.workType && updates.workType !== "standard") {
+        next.workStart = "";
+        next.workEnd = "";
+        next.workDays = [];
+      } else if (updates.workType === "standard" && !prev.workStart) {
+        // Restore defaults when switching back to standard
+        next.workStart = "09:00";
+        next.workEnd = "17:00";
+        next.workDays = ["monday", "tuesday", "wednesday", "thursday", "friday"];
+      }
+      return next;
+    });
   };
 
   // Calculate weekday bedtime
@@ -463,7 +477,7 @@ export default function OnboardingPage() {
       const isWeekday = day >= 1 && day <= 5;
       const isWeekend = !isWeekday;
       const dayName = getDayName(day).toLowerCase();
-      const hasWork = data.workDays.includes(dayName) && hasWorkHours;
+      const hasWork = data.workType === "standard" && data.workDays.includes(dayName) && hasWorkHours;
       const wakeTime = isWeekend ? data.weekendWakeTime : data.weekdayWakeTime;
       const bedtime = isWeekend ? data.weekendBedtime : data.bedtime;
 
