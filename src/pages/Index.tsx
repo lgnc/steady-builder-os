@@ -128,7 +128,7 @@ export default function Index() {
       {/* Footer */}
       <footer className="relative z-10 px-6 py-8 text-center border-t border-border/50">
         <p className="text-sm text-muted-foreground mb-2">
-          "Discipline equals freedom."
+          "Structure equals freedom."
         </p>
         <p className="text-xs text-muted-foreground">
           Structure. Execution. Consistency.
