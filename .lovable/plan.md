@@ -1,5 +1,4 @@
 
-
 # Betterment OS — Project Dossier
 
 ## 1. What It Is
@@ -136,4 +135,3 @@ The data model stores `week_start_date` on training schedules but there's no mec
 | Authentication | Email/password with email confirmation |
 | AI integrations | 3 (coach chat, nutrition plan, weekly review) |
 | Payment integration | None (UI shells only) |
-
