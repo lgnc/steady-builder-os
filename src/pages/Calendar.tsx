@@ -4,7 +4,7 @@ import { format, startOfWeek, addDays, isSameDay } from "date-fns";
 import { ChevronLeft, ChevronRight, Clock, Lock, Plus, Trash2, Home, HardHat } from "lucide-react";
 import { ShiftConfigSheet } from "@/components/calendar/ShiftConfigSheet";
 import { ShiftEntrySheet } from "@/components/calendar/ShiftEntrySheet";
-import { rebuildDayAroundShift, addMinutesTime, type OnboardingDurations, type ShiftEntry } from "@/lib/shiftScheduleBuilder";
+import { rebuildDayAroundShift, generateFIFOOnSiteSchedule, type OnboardingDurations, type ShiftEntry } from "@/lib/schedulers";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -213,7 +213,27 @@ export default function CalendarPage() {
 
     // 4. Regenerate on-site blocks based on config + home training days
     const allDays = [0, 1, 2, 3, 4, 5, 6];
-    const newBlocks = generateOnSiteBlocksFromConfig(user.id, config, fifoShiftLength, allDays, trainingDayMap);
+    const newBlocks = generateFIFOOnSiteSchedule({
+      userId: user.id,
+      shiftType: config.shiftType,
+      shiftStart: config.shiftStart,
+      shiftEnd: config.shiftEnd,
+      allDays,
+      trainingDayMap,
+      trainingDuration: 45,
+      scheduleMode: "on_site",
+      // BaseConfig fields: provide defaults (unused by on-site generator)
+      wakeTime: "06:00",
+      weekendWakeTime: "07:00",
+      bedtime: onboardingDurations.bedtime,
+      weekendBedtime: onboardingDurations.weekendBedtime,
+      sleepDuration: onboardingDurations.sleepDuration,
+      commuteMinutes: onboardingDurations.commuteMinutes,
+      gymCommuteMinutes: onboardingDurations.gymCommuteMinutes,
+      workToGymMinutes: onboardingDurations.workToGymMinutes,
+      morningRoutineMinutes: 20,
+      eveningRoutineMinutes: 20,
+    });
 
     if (newBlocks.length > 0) {
       await supabase.from("schedule_blocks").insert(newBlocks as any);
@@ -1005,66 +1025,4 @@ export default function CalendarPage() {
       )}
     </MobileLayout>
   );
-}
-
-
-
-
-function generateOnSiteBlocksFromConfig(
-  userId: string,
-  config: { shiftType: "days" | "nights"; shiftStart: string; shiftEnd: string },
-  shiftLength: number,
-  allDays: number[],
-  trainingDayMap: Map<number, string | null>
-): any[] {
-  const blocks: any[] = [];
-  const shortRoutine = 20;
-  const trainingDuration = 45;
-  const hasTraining = (day: number) => trainingDayMap.has(day);
-  const getTrainingDayId = (day: number) => trainingDayMap.get(day) || null;
-
-  allDays.forEach((day) => {
-    if (config.shiftType === "days") {
-      const wakeTime = addMinutesTime(config.shiftStart, -60);
-      const bedtime = addMinutesTime(config.shiftEnd, 180);
-      const cappedBedtime = bedtime > "23:00" ? "22:00" : bedtime;
-
-      blocks.push({ user_id: userId, block_type: 'morning_routine', title: 'Morning Routine', start_time: wakeTime, end_time: addMinutesTime(wakeTime, shortRoutine), day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
-      blocks.push({ user_id: userId, block_type: 'work', title: 'Site Shift', start_time: config.shiftStart, end_time: config.shiftEnd, day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
-
-      // Training after shift — only on scheduled training days
-      if (hasTraining(day)) {
-        const trainingStart = addMinutesTime(config.shiftEnd, 30);
-        const trainingEnd = addMinutesTime(trainingStart, trainingDuration);
-        if (trainingEnd <= "20:30") {
-          blocks.push({ user_id: userId, block_type: 'training', title: 'On-Site Training', start_time: trainingStart, end_time: trainingEnd, day_of_week: day, is_locked: false, schedule_mode: 'on_site', training_day_id: getTrainingDayId(day) });
-        }
-      }
-
-      blocks.push({ user_id: userId, block_type: 'evening_routine', title: 'Evening Routine', start_time: addMinutesTime(cappedBedtime, -shortRoutine), end_time: cappedBedtime, day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
-      blocks.push({ user_id: userId, block_type: 'sleep', title: 'Sleep', start_time: cappedBedtime, end_time: wakeTime, day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
-    } else {
-      // Night shift
-      const wakeTime = addMinutesTime(config.shiftStart, -120);
-      const sleepEnd = addMinutesTime(wakeTime, 0);
-      const sleepStart = addMinutesTime(config.shiftEnd, 60);
-
-      blocks.push({ user_id: userId, block_type: 'sleep', title: 'Sleep', start_time: sleepStart, end_time: sleepEnd, day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
-      blocks.push({ user_id: userId, block_type: 'morning_routine', title: 'Afternoon Routine', start_time: wakeTime, end_time: addMinutesTime(wakeTime, shortRoutine), day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
-
-      // Training before shift — only on scheduled training days
-      if (hasTraining(day)) {
-        const trainingStart = addMinutesTime(wakeTime, shortRoutine + 15);
-        const trainingEnd = addMinutesTime(trainingStart, trainingDuration);
-        const latestTraining = addMinutesTime(config.shiftStart, -30);
-        if (trainingEnd <= latestTraining) {
-          blocks.push({ user_id: userId, block_type: 'training', title: 'On-Site Training', start_time: trainingStart, end_time: trainingEnd, day_of_week: day, is_locked: false, schedule_mode: 'on_site', training_day_id: getTrainingDayId(day) });
-        }
-      }
-
-      blocks.push({ user_id: userId, block_type: 'work', title: 'Night Shift', start_time: config.shiftStart, end_time: config.shiftEnd, day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
-    }
-  });
-
-  return blocks;
 }

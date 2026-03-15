@@ -8,6 +8,13 @@ import { Button } from "@/components/ui/button";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { useToast } from "@/hooks/use-toast";
 import { BuildingPlanScreen } from "@/components/onboarding/BuildingPlanScreen";
+import {
+  generateStandardSchedule,
+  generateProvisionalSchedule,
+  generateFIFOHomeSchedule,
+  addMinutes,
+  type BlockInput,
+} from "@/lib/schedulers";
 
 // Step components
 import { SleepStep } from "@/components/onboarding/SleepStep";
@@ -425,19 +432,21 @@ export default function OnboardingPage() {
   const generateSchedule = async () => {
     if (!user) return;
 
-    // Clear existing schedule data to prevent duplicates on re-onboarding
-    await supabase.from("schedule_block_overrides").delete().eq("user_id", user.id);
-    await supabase.from("schedule_blocks").delete().eq("user_id", user.id);
-    await supabase.from("user_training_schedule").delete().eq("user_id", user.id);
-    await supabase.from("routine_checklist_completions").delete().eq("user_id", user.id);
-    await supabase.from("routine_checklist_items").delete().eq("user_id", user.id);
-    await supabase.from("workout_sessions").delete().eq("user_id", user.id);
-    await supabase.from("habit_completions").delete().eq("user_id", user.id);
-    await supabase.from("meal_completions").delete().eq("user_id", user.id);
-    await supabase.from("workout_logs").delete().eq("user_id", user.id);
-    await supabase.from("daily_weights").delete().eq("user_id", user.id);
-    await supabase.from("shift_entries").delete().eq("user_id", user.id);
-    await supabase.from("user_schedule_mode").delete().eq("user_id", user.id);
+    // Wipe all existing schedule data — always regenerate from source, never patch
+    await Promise.all([
+      supabase.from("schedule_block_overrides").delete().eq("user_id", user.id),
+      supabase.from("schedule_blocks").delete().eq("user_id", user.id),
+      supabase.from("user_training_schedule").delete().eq("user_id", user.id),
+      supabase.from("routine_checklist_completions").delete().eq("user_id", user.id),
+      supabase.from("routine_checklist_items").delete().eq("user_id", user.id),
+      supabase.from("workout_sessions").delete().eq("user_id", user.id),
+      supabase.from("habit_completions").delete().eq("user_id", user.id),
+      supabase.from("meal_completions").delete().eq("user_id", user.id),
+      supabase.from("workout_logs").delete().eq("user_id", user.id),
+      supabase.from("daily_weights").delete().eq("user_id", user.id),
+      supabase.from("shift_entries").delete().eq("user_id", user.id),
+      supabase.from("user_schedule_mode").delete().eq("user_id", user.id),
+    ]);
 
     const { data: trainingDaysData } = await supabase
       .from("training_days")
@@ -451,315 +460,117 @@ export default function OnboardingPage() {
       ? allDays.filter((d) => data.preferredTrainingDays.includes(getDayName(d).toLowerCase()))
       : allDays.filter((d) => !data.restDays.includes(getDayName(d).toLowerCase()));
 
-    const trainingDayMap: Record<number, string> = {};
+    // Build trainingDayMap as Map<number, string | null> for scheduler consumption
+    const trainingDayMap = new Map<number, string | null>();
     if (trainingDaysData) {
       const programDays = trainingDaysData.length;
       const totalAvailable = availableDays.length;
 
       if (programDays >= totalAvailable) {
-        // Use all available days
         trainingDaysData.forEach((td, idx) => {
-          if (idx < totalAvailable) {
-            trainingDayMap[availableDays[idx]] = td.id;
-          }
+          if (idx < totalAvailable) trainingDayMap.set(availableDays[idx], td.id);
         });
       } else {
-        // Evenly distribute: e.g. 4 sessions across 5 days → Mon, Tue, Thu, Fri
         const spacing = totalAvailable / programDays;
         trainingDaysData.forEach((td, idx) => {
           const slotIdx = Math.round(idx * spacing);
           const clampedIdx = Math.min(slotIdx, totalAvailable - 1);
-          trainingDayMap[availableDays[clampedIdx]] = td.id;
+          trainingDayMap.set(availableDays[clampedIdx], td.id);
         });
       }
     }
 
-    const homeToWork = data.commuteMinutes || 0;
-    const homeToGym = data.gymCommuteMinutes || 0;
-    const workToGym = data.workToGymMinutes || 0;
-    const gymToWorkDirect = data.gymToWorkDirect;
-    const trainingDuration = 60;
-    const morningRoutineMinutes = 45;
-    const hasWorkHours = !!(data.workStart && data.workEnd);
+    // Base config shared by all schedulers
+    const baseConfig = {
+      userId: user.id,
+      wakeTime: data.weekdayWakeTime,
+      weekendWakeTime: data.weekendWakeTime,
+      bedtime: data.bedtime,
+      weekendBedtime: data.weekendBedtime,
+      sleepDuration: data.sleepDuration,
+      commuteMinutes: data.commuteMinutes || 0,
+      gymCommuteMinutes: data.gymCommuteMinutes || 0,
+      workToGymMinutes: data.workToGymMinutes || 0,
+      trainingDayMap,
+      trainingDuration: 60,
+      morningRoutineMinutes: 45,
+      eveningRoutineMinutes: 45,
+    };
 
-    const blocks: any[] = [];
+    // ── Dispatch to the appropriate scheduler ──────────────────────────────
+    let homeBlocks: BlockInput[];
 
-    allDays.forEach((day) => {
-      const isRestDay = data.restDays.includes(getDayName(day).toLowerCase());
-      const hasTraining = !isRestDay && trainingDayMap[day];
-      const td = hasTraining
-        ? trainingDaysData?.find((t) => t.id === trainingDayMap[day])
-        : null;
-      const isWeekday = day >= 1 && day <= 5;
-      const isWeekend = !isWeekday;
-      const dayName = getDayName(day).toLowerCase();
-      const hasWork = data.workType === "standard" && data.workDays.includes(dayName) && hasWorkHours;
-      const wakeTime = isWeekend ? data.weekendWakeTime : data.weekdayWakeTime;
-      const bedtime = isWeekend ? data.weekendBedtime : data.bedtime;
-
-      const morningRoutineEnd = addMinutes(wakeTime, morningRoutineMinutes);
-
-      blocks.push({
-        user_id: user.id,
-        block_type: "morning_routine",
-        title: "Morning Routine",
-        start_time: wakeTime,
-        end_time: morningRoutineEnd,
-        day_of_week: day,
-        is_locked: true,
+    if (data.workType === "standard") {
+      const workDayNumbers = allDays.filter((d) =>
+        data.workDays.includes(getDayName(d).toLowerCase())
+      );
+      homeBlocks = generateStandardSchedule({
+        ...baseConfig,
+        workDays: workDayNumbers,
+        workStart: data.workStart || "09:00",
+        workEnd: data.workEnd || "17:00",
+        preferredTrainingWindow: data.preferredTrainingWindow,
+        gymToWorkDirect: data.gymToWorkDirect,
+        scheduleMode: "home",
       });
-
-      if (hasTraining && data.preferredTrainingWindow === "morning") {
-        // Check if morning training fits before work
-        let useMorning = true;
-        if (hasWork) {
-          // Calculate the total time needed: commute to gym + training + commute to work (or back home + commute to work)
-          const commuteAfterTraining = gymToWorkDirect ? workToGym : (homeToGym + homeToWork);
-          const totalNeeded = homeToGym + trainingDuration + commuteAfterTraining;
-          const latestTrainingEnd = addMinutes(morningRoutineEnd, homeToGym + trainingDuration);
-          // If training + commutes would end after work start, try working backwards from work start
-          if (latestTrainingEnd > data.workStart) {
-            // Work backwards from workStart
-            const gymStartFromWork = gymToWorkDirect
-              ? addMinutes(data.workStart, -(workToGym + trainingDuration))
-              : addMinutes(data.workStart, -(homeToWork + homeToGym + trainingDuration));
-            const departHome = addMinutes(gymStartFromWork, -homeToGym);
-            if (departHome >= morningRoutineEnd) {
-              // Fits before work — use adjusted times
-              let cursor = departHome;
-              if (homeToGym > 0) {
-                blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Gym", start_time: cursor, end_time: addMinutes(cursor, homeToGym), day_of_week: day, is_locked: true });
-                cursor = addMinutes(cursor, homeToGym);
-              }
-              blocks.push({ user_id: user.id, block_type: "training", title: td ? td.name : "Training", start_time: cursor, end_time: addMinutes(cursor, trainingDuration), day_of_week: day, is_locked: true, training_day_id: trainingDayMap[day] });
-              cursor = addMinutes(cursor, trainingDuration);
-              if (gymToWorkDirect) {
-                if (workToGym > 0) {
-                  blocks.push({ user_id: user.id, block_type: "commute", title: "Gym to Work", start_time: cursor, end_time: addMinutes(cursor, workToGym), day_of_week: day, is_locked: true });
-                }
-              } else {
-                if (homeToGym > 0) {
-                  blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Gym", start_time: cursor, end_time: addMinutes(cursor, homeToGym), day_of_week: day, is_locked: true });
-                }
-                if (homeToWork > 0) {
-                  blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Work", start_time: addMinutes(data.workStart, -homeToWork), end_time: data.workStart, day_of_week: day, is_locked: true });
-                }
-              }
-              blocks.push({ user_id: user.id, block_type: "work", title: "Work", start_time: data.workStart, end_time: data.workEnd, day_of_week: day, is_locked: false });
-              if (homeToWork > 0) {
-                blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Work", start_time: data.workEnd, end_time: addMinutes(data.workEnd, homeToWork), day_of_week: day, is_locked: true });
-              }
-              useMorning = false; // already handled
-            } else {
-              // No room before work — fall back to evening
-              useMorning = false;
-              // Add work blocks then evening training
-              if (homeToWork > 0) {
-                blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Work", start_time: addMinutes(data.workStart, -homeToWork), end_time: data.workStart, day_of_week: day, is_locked: true });
-              }
-              blocks.push({ user_id: user.id, block_type: "work", title: "Work", start_time: data.workStart, end_time: data.workEnd, day_of_week: day, is_locked: false });
-              let cursor = data.workEnd;
-              if (workToGym > 0) {
-                blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Gym from Work", start_time: cursor, end_time: addMinutes(cursor, workToGym), day_of_week: day, is_locked: true });
-                cursor = addMinutes(cursor, workToGym);
-              }
-              blocks.push({ user_id: user.id, block_type: "training", title: td ? td.name : "Training", start_time: cursor, end_time: addMinutes(cursor, trainingDuration), day_of_week: day, is_locked: true, training_day_id: trainingDayMap[day] });
-              cursor = addMinutes(cursor, trainingDuration);
-              if (homeToGym > 0) {
-                blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Gym", start_time: cursor, end_time: addMinutes(cursor, homeToGym), day_of_week: day, is_locked: true });
-              }
-              if (homeToWork > 0) {
-                blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Work", start_time: data.workEnd, end_time: addMinutes(data.workEnd, homeToWork), day_of_week: day, is_locked: true });
-              }
-            }
-          }
-        }
-
-        if (useMorning) {
-          // Original morning logic (no work conflict)
-          let cursor = morningRoutineEnd;
-          if (homeToGym > 0) {
-            blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Gym", start_time: cursor, end_time: addMinutes(cursor, homeToGym), day_of_week: day, is_locked: true });
-            cursor = addMinutes(cursor, homeToGym);
-          }
-          blocks.push({ user_id: user.id, block_type: "training", title: td ? td.name : "Training", start_time: cursor, end_time: addMinutes(cursor, trainingDuration), day_of_week: day, is_locked: true, training_day_id: trainingDayMap[day] });
-          cursor = addMinutes(cursor, trainingDuration);
-          if (hasWork && gymToWorkDirect) {
-            if (workToGym > 0) {
-              blocks.push({ user_id: user.id, block_type: "commute", title: "Gym to Work", start_time: cursor, end_time: addMinutes(cursor, workToGym), day_of_week: day, is_locked: true });
-              cursor = addMinutes(cursor, workToGym);
-            }
-            const workStart = cursor > data.workStart ? cursor : data.workStart;
-            blocks.push({ user_id: user.id, block_type: "work", title: "Work", start_time: workStart, end_time: data.workEnd, day_of_week: day, is_locked: false });
-            if (homeToWork > 0) {
-              blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Work", start_time: data.workEnd, end_time: addMinutes(data.workEnd, homeToWork), day_of_week: day, is_locked: true });
-            }
-          } else if (hasWork) {
-            if (homeToGym > 0) {
-              blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Gym", start_time: cursor, end_time: addMinutes(cursor, homeToGym), day_of_week: day, is_locked: true });
-              cursor = addMinutes(cursor, homeToGym);
-            }
-            if (homeToWork > 0) {
-              blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Work", start_time: addMinutes(data.workStart, -homeToWork), end_time: data.workStart, day_of_week: day, is_locked: true });
-            }
-            blocks.push({ user_id: user.id, block_type: "work", title: "Work", start_time: data.workStart, end_time: data.workEnd, day_of_week: day, is_locked: false });
-            if (homeToWork > 0) {
-              blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Work", start_time: data.workEnd, end_time: addMinutes(data.workEnd, homeToWork), day_of_week: day, is_locked: true });
-            }
-          } else {
-            if (homeToGym > 0) {
-              blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Gym", start_time: cursor, end_time: addMinutes(cursor, homeToGym), day_of_week: day, is_locked: true });
-            }
-          }
-        }
-      } else if (hasTraining && data.preferredTrainingWindow === "evening") {
-        if (hasWork) {
-          if (homeToWork > 0) {
-            blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Work", start_time: addMinutes(data.workStart, -homeToWork), end_time: data.workStart, day_of_week: day, is_locked: true });
-          }
-          blocks.push({ user_id: user.id, block_type: "work", title: "Work", start_time: data.workStart, end_time: data.workEnd, day_of_week: day, is_locked: false });
-
-          let cursor = data.workEnd;
-          if (workToGym > 0) {
-            blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Gym from Work", start_time: cursor, end_time: addMinutes(cursor, workToGym), day_of_week: day, is_locked: true });
-            cursor = addMinutes(cursor, workToGym);
-          }
-          blocks.push({ user_id: user.id, block_type: "training", title: td ? td.name : "Training", start_time: cursor, end_time: addMinutes(cursor, trainingDuration), day_of_week: day, is_locked: true, training_day_id: trainingDayMap[day] });
-          cursor = addMinutes(cursor, trainingDuration);
-          if (homeToGym > 0) {
-            blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Gym", start_time: cursor, end_time: addMinutes(cursor, homeToGym), day_of_week: day, is_locked: true });
-          }
-        } else {
-          let cursor = morningRoutineEnd;
-          if (homeToGym > 0) {
-            const eveningStart = "17:00";
-            blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Gym", start_time: eveningStart, end_time: addMinutes(eveningStart, homeToGym), day_of_week: day, is_locked: true });
-            cursor = addMinutes(eveningStart, homeToGym);
-          } else {
-            cursor = "17:00";
-          }
-          blocks.push({ user_id: user.id, block_type: "training", title: td ? td.name : "Training", start_time: cursor, end_time: addMinutes(cursor, trainingDuration), day_of_week: day, is_locked: true, training_day_id: trainingDayMap[day] });
-          cursor = addMinutes(cursor, trainingDuration);
-          if (homeToGym > 0) {
-            blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Gym", start_time: cursor, end_time: addMinutes(cursor, homeToGym), day_of_week: day, is_locked: true });
-          }
-        }
-      } else if (hasTraining && data.preferredTrainingWindow === "afternoon") {
-        if (hasWork) {
-          if (homeToWork > 0) {
-            blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Work", start_time: addMinutes(data.workStart, -homeToWork), end_time: data.workStart, day_of_week: day, is_locked: true });
-          }
-          blocks.push({ user_id: user.id, block_type: "work", title: "Work", start_time: data.workStart, end_time: data.workEnd, day_of_week: day, is_locked: false });
-
-          const trainingStart = "12:00";
-          let cursor = trainingStart;
-          if (workToGym > 0) {
-            blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Gym from Work", start_time: addMinutes(trainingStart, -workToGym), end_time: trainingStart, day_of_week: day, is_locked: true });
-          }
-          blocks.push({ user_id: user.id, block_type: "training", title: td ? td.name : "Training", start_time: cursor, end_time: addMinutes(cursor, trainingDuration), day_of_week: day, is_locked: true, training_day_id: trainingDayMap[day] });
-          cursor = addMinutes(cursor, trainingDuration);
-          if (workToGym > 0) {
-            blocks.push({ user_id: user.id, block_type: "commute", title: "Gym to Work", start_time: cursor, end_time: addMinutes(cursor, workToGym), day_of_week: day, is_locked: true });
-          }
-          if (homeToWork > 0) {
-            blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Work", start_time: data.workEnd, end_time: addMinutes(data.workEnd, homeToWork), day_of_week: day, is_locked: true });
-          }
-        } else {
-          const trainingStart = "12:00";
-          let cursor = trainingStart;
-          if (homeToGym > 0) {
-            blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Gym", start_time: addMinutes(trainingStart, -homeToGym), end_time: trainingStart, day_of_week: day, is_locked: true });
-          }
-          blocks.push({ user_id: user.id, block_type: "training", title: td ? td.name : "Training", start_time: cursor, end_time: addMinutes(cursor, trainingDuration), day_of_week: day, is_locked: true, training_day_id: trainingDayMap[day] });
-          cursor = addMinutes(cursor, trainingDuration);
-          if (homeToGym > 0) {
-            blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Gym", start_time: cursor, end_time: addMinutes(cursor, homeToGym), day_of_week: day, is_locked: true });
-          }
-        }
-      } else {
-        if (hasWork) {
-          if (homeToWork > 0) {
-            blocks.push({ user_id: user.id, block_type: "commute", title: "Drive to Work", start_time: addMinutes(data.workStart, -homeToWork), end_time: data.workStart, day_of_week: day, is_locked: true });
-          }
-          blocks.push({ user_id: user.id, block_type: "work", title: "Work", start_time: data.workStart, end_time: data.workEnd, day_of_week: day, is_locked: false });
-          if (homeToWork > 0) {
-            blocks.push({ user_id: user.id, block_type: "commute", title: "Drive Home from Work", start_time: data.workEnd, end_time: addMinutes(data.workEnd, homeToWork), day_of_week: day, is_locked: true });
-          }
-        }
-      }
-
-      // Evening Routine (includes reading time)
-      blocks.push({
-        user_id: user.id,
-        block_type: "evening_routine",
-        title: "Evening Routine",
-        start_time: addMinutes(bedtime, -45),
-        end_time: bedtime,
-        day_of_week: day,
-        is_locked: true,
+    } else if (data.workType === "shift_work") {
+      homeBlocks = generateProvisionalSchedule({
+        ...baseConfig,
+        rosterDay: data.rosterDay,
+        scheduleMode: "home",
       });
-
-      // Sleep — end_time uses the NEXT day's wake time (you wake up the next morning)
-      const nextDay = (day + 1) % 7;
-      const nextDayIsWeekday = nextDay >= 1 && nextDay <= 5;
-      const nextDayWakeTime = nextDayIsWeekday ? data.weekdayWakeTime : data.weekendWakeTime;
-
-      blocks.push({
-        user_id: user.id,
-        block_type: "sleep",
-        title: "Sleep",
-        start_time: bedtime,
-        end_time: nextDayWakeTime,
-        day_of_week: day,
-        is_locked: true,
+    } else {
+      // FIFO — home blocks only; on-site blocks generated later via Calendar ShiftConfigSheet
+      homeBlocks = generateFIFOHomeSchedule({
+        ...baseConfig,
+        scheduleMode: "home",
       });
-    });
-
-    // Strategy Block
-    const strategyDay = data.strategyDay;
-    const strategyDayBlocks = blocks.filter((b: any) => b.day_of_week === strategyDay && b.block_type !== "sleep");
-    const morningRoutineOnStrategyDay = strategyDayBlocks.find((b: any) => b.block_type === "morning_routine");
-    const strategyWakeTime = (strategyDay >= 1 && strategyDay <= 5) ? data.weekdayWakeTime : data.weekendWakeTime;
-    const morningRoutineEndTime = morningRoutineOnStrategyDay ? morningRoutineOnStrategyDay.end_time : addMinutes(strategyWakeTime, 45);
-
-    const otherBlocks = strategyDayBlocks
-      .filter((b: any) => b.block_type !== "morning_routine")
-      .sort((a: any, b: any) => a.start_time.localeCompare(b.start_time));
-
-    let strategyStart = morningRoutineEndTime;
-    const strategyDurationMinutes = 45;
-
-    for (const block of otherBlocks) {
-      const candidateEnd = addMinutes(strategyStart, strategyDurationMinutes);
-      if (candidateEnd <= block.start_time) {
-        break;
-      }
-      if (block.end_time > strategyStart) {
-        strategyStart = block.end_time;
-      }
     }
 
-    blocks.push({
-      user_id: user.id,
-      block_type: "strategy",
-      title: "Sunday Planning Ritual",
-      start_time: strategyStart,
-      end_time: addMinutes(strategyStart, strategyDurationMinutes),
-      day_of_week: strategyDay,
-      is_locked: false,
-    });
+    // ── Strategy block ───────────────────────────────────────────────────────
+    const strategyDay = data.strategyDay;
+    {
+      const strategyDayBlocks = homeBlocks.filter((b) => b.day_of_week === strategyDay && b.block_type !== "sleep");
+      const morningRoutineOnStrategyDay = strategyDayBlocks.find((b) => b.block_type === "morning_routine");
+      const strategyWakeTime = (strategyDay >= 1 && strategyDay <= 5) ? data.weekdayWakeTime : data.weekendWakeTime;
+      const morningRoutineEndTime = morningRoutineOnStrategyDay ? morningRoutineOnStrategyDay.end_time : addMinutes(strategyWakeTime, 45);
 
-    // Roster Reminder block for shift/FIFO workers
-    if (data.rosterDay !== null && (data.workType === 'shift_work' || data.workType === 'fifo')) {
+      const otherStrategyBlocks = strategyDayBlocks
+        .filter((b) => b.block_type !== "morning_routine")
+        .sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+      let strategyStart = morningRoutineEndTime;
+      const strategyDurationMinutes = 45;
+
+      for (const block of otherStrategyBlocks) {
+        const candidateEnd = addMinutes(strategyStart, strategyDurationMinutes);
+        if (candidateEnd <= block.start_time) break;
+        if (block.end_time > strategyStart) strategyStart = block.end_time;
+      }
+
+      homeBlocks.push({
+        user_id: user.id,
+        block_type: "strategy",
+        title: "Sunday Planning Ritual",
+        start_time: strategyStart,
+        end_time: addMinutes(strategyStart, strategyDurationMinutes),
+        day_of_week: strategyDay,
+        is_locked: false,
+        schedule_mode: "home",
+      });
+    }
+
+    // ── Roster reminder block (shift/FIFO workers) ───────────────────────────
+    if (data.rosterDay !== null && (data.workType === "shift_work" || data.workType === "fifo")) {
       const rosterDay = data.rosterDay;
-      const rosterDayBlocks = blocks.filter((b: any) => b.day_of_week === rosterDay && b.block_type !== "sleep");
-      const morningRoutineOnRosterDay = rosterDayBlocks.find((b: any) => b.block_type === "morning_routine");
+      const rosterDayBlocks = homeBlocks.filter((b) => b.day_of_week === rosterDay && b.block_type !== "sleep");
+      const morningRoutineOnRosterDay = rosterDayBlocks.find((b) => b.block_type === "morning_routine");
       const rosterWakeTime = (rosterDay >= 1 && rosterDay <= 5) ? data.weekdayWakeTime : data.weekendWakeTime;
       const rosterMorningEnd = morningRoutineOnRosterDay ? morningRoutineOnRosterDay.end_time : addMinutes(rosterWakeTime, 45);
 
       const rosterOtherBlocks = rosterDayBlocks
-        .filter((b: any) => b.block_type !== "morning_routine")
-        .sort((a: any, b: any) => a.start_time.localeCompare(b.start_time));
+        .filter((b) => b.block_type !== "morning_routine")
+        .sort((a, b) => a.start_time.localeCompare(b.start_time));
 
       let rosterStart = rosterMorningEnd;
       const rosterDurationMinutes = 15;
@@ -770,7 +581,7 @@ export default function OnboardingPage() {
         if (block.end_time > rosterStart) rosterStart = block.end_time;
       }
 
-      blocks.push({
+      homeBlocks.push({
         user_id: user.id,
         block_type: "roster_reminder",
         title: "Update Weekly Shifts",
@@ -778,28 +589,30 @@ export default function OnboardingPage() {
         end_time: addMinutes(rosterStart, rosterDurationMinutes),
         day_of_week: rosterDay,
         is_locked: true,
+        schedule_mode: "home",
       });
     }
 
-    // Tag all home blocks with schedule_mode
-    const homeBlocks = blocks.map((b: any) => ({ ...b, schedule_mode: 'home' }));
     await supabase.from("schedule_blocks").insert(homeBlocks);
 
     // On-site blocks are NOT generated during onboarding.
     // They are created when the user first toggles to "On-Site" on the calendar
     // and configures their shift via the ShiftConfigSheet.
 
+    // ── Save training schedule entries ───────────────────────────────────────
     if (trainingDaysData) {
-      const scheduleEntries = Object.entries(trainingDayMap).map(
-        ([dayOfWeek, trainingDayId]) => ({
-          user_id: user.id,
-          training_day_id: trainingDayId,
-          day_of_week: parseInt(dayOfWeek, 10),
-          week_number: 1,
-          completed: false,
-        })
-      );
-
+      const scheduleEntries: { user_id: string; training_day_id: string; day_of_week: number; week_number: number; completed: boolean }[] = [];
+      trainingDayMap.forEach((trainingDayId, dayOfWeek) => {
+        if (trainingDayId) {
+          scheduleEntries.push({
+            user_id: user.id,
+            training_day_id: trainingDayId,
+            day_of_week: dayOfWeek,
+            week_number: 1,
+            completed: false,
+          });
+        }
+      });
       if (scheduleEntries.length > 0) {
         await supabase.from("user_training_schedule").insert(scheduleEntries);
       }
@@ -956,72 +769,7 @@ function getDayName(day: number): string {
   return days[day];
 }
 
-function addMinutes(time: string, minutes: number): string {
-  const [hours, mins] = time.split(":").map(Number);
-  const totalMinutes = hours * 60 + mins + minutes;
-  const normalizedMinutes = ((totalMinutes % (24 * 60)) + 24 * 60) % (24 * 60);
-  
-  const newHours = Math.floor(normalizedMinutes / 60);
-  const newMins = normalizedMinutes % 60;
-  
-  return `${newHours.toString().padStart(2, "0")}:${newMins.toString().padStart(2, "0")}`;
-}
-
-function generateOnSiteBlocks(userId: string, data: OnboardingData, allDays: number[]): any[] {
-  const blocks: any[] = [];
-  const shiftLength = data.fifoShiftLength || 12;
-  const shiftType = data.fifoShiftType || 'days';
-  const shortRoutine = 20;
-  const trainingDuration = 45; // compressed on-site session
-
-  allDays.forEach((day) => {
-    const isDayShift = shiftType === 'days' || (shiftType === 'both' && day % 2 === 0);
-
-    if (isDayShift) {
-      // Day shift: wake 05:00, shift 06:00-18:00 (or 16:00 for 10h)
-      const wakeTime = '05:00';
-      const shiftStart = '06:00';
-      const shiftEnd = shiftLength === 12 ? '18:00' : '16:00';
-      const bedtime = '21:00';
-
-      blocks.push({ user_id: userId, block_type: 'morning_routine', title: 'Morning Routine', start_time: wakeTime, end_time: addMinutes(wakeTime, shortRoutine), day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
-      blocks.push({ user_id: userId, block_type: 'work', title: 'Site Shift', start_time: shiftStart, end_time: shiftEnd, day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
-
-      // Training after shift if time allows
-      const trainingStart = addMinutes(shiftEnd, 30);
-      const trainingEnd = addMinutes(trainingStart, trainingDuration);
-      if (trainingEnd <= '20:30') {
-        blocks.push({ user_id: userId, block_type: 'training', title: 'On-Site Training', start_time: trainingStart, end_time: trainingEnd, day_of_week: day, is_locked: false, schedule_mode: 'on_site' });
-      }
-
-      blocks.push({ user_id: userId, block_type: 'evening_routine', title: 'Evening Routine', start_time: addMinutes(bedtime, -shortRoutine), end_time: bedtime, day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
-
-      const nextDay = (day + 1) % 7;
-      blocks.push({ user_id: userId, block_type: 'sleep', title: 'Sleep', start_time: bedtime, end_time: '05:00', day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
-    } else {
-      // Night shift: wake 16:00, shift 18:00-06:00 (or 04:00 for 10h), sleep 07:00-15:00
-      const wakeTime = '16:00';
-      const shiftStart = '18:00';
-      const shiftEnd = shiftLength === 12 ? '06:00' : '04:00';
-      const sleepStart = '07:00';
-      const sleepEnd = '15:00';
-
-      blocks.push({ user_id: userId, block_type: 'sleep', title: 'Sleep', start_time: sleepStart, end_time: sleepEnd, day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
-      blocks.push({ user_id: userId, block_type: 'morning_routine', title: 'Afternoon Routine', start_time: wakeTime, end_time: addMinutes(wakeTime, shortRoutine), day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
-
-      // Training before shift
-      const trainingStart = addMinutes(wakeTime, shortRoutine + 15);
-      const trainingEnd = addMinutes(trainingStart, trainingDuration);
-      if (trainingEnd <= '17:30') {
-        blocks.push({ user_id: userId, block_type: 'training', title: 'On-Site Training', start_time: trainingStart, end_time: trainingEnd, day_of_week: day, is_locked: false, schedule_mode: 'on_site' });
-      }
-
-      blocks.push({ user_id: userId, block_type: 'work', title: 'Night Shift', start_time: shiftStart, end_time: shiftEnd, day_of_week: day, is_locked: true, schedule_mode: 'on_site' });
-    }
-  });
-
-  return blocks;
-}
+// addMinutes and generateOnSiteBlocks are now provided by @/lib/schedulers
 
 const DEFAULT_MORNING_ITEMS = [
   "Hydrate (500ml water)",
