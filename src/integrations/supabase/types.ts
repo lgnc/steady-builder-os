@@ -340,7 +340,11 @@ export type Database = {
           dietary_choices: string[] | null
           experience_tier: string
           fat_target: number | null
+          fifo_on_site_bedtime: string | null
+          fifo_on_site_wake_time: string | null
+          fifo_shift_end: string | null
           fifo_shift_length: number | null
+          fifo_shift_start: string | null
           fifo_shift_type: string | null
           flexible_work: boolean | null
           friction_points: string[] | null
@@ -393,7 +397,11 @@ export type Database = {
           dietary_choices?: string[] | null
           experience_tier?: string
           fat_target?: number | null
+          fifo_on_site_bedtime?: string | null
+          fifo_on_site_wake_time?: string | null
+          fifo_shift_end?: string | null
           fifo_shift_length?: number | null
+          fifo_shift_start?: string | null
           fifo_shift_type?: string | null
           flexible_work?: boolean | null
           friction_points?: string[] | null
@@ -446,7 +454,11 @@ export type Database = {
           dietary_choices?: string[] | null
           experience_tier?: string
           fat_target?: number | null
+          fifo_on_site_bedtime?: string | null
+          fifo_on_site_wake_time?: string | null
+          fifo_shift_end?: string | null
           fifo_shift_length?: number | null
+          fifo_shift_start?: string | null
           fifo_shift_type?: string | null
           flexible_work?: boolean | null
           friction_points?: string[] | null
